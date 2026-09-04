@@ -1,0 +1,13 @@
+# Railway Deployment Configuration for AI Job Assistant Backend Web Service
+# Active when Service Root Directory is set to /backend
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "sh -c 'uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}'"
+healthcheckPath = "/api/v1/health/live"
+healthcheckTimeout = 120
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5

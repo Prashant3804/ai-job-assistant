@@ -231,3 +231,53 @@ async def test_e2e_production_readiness_pipeline(async_client: AsyncClient, asyn
     worker = ProductionWorker(poll_interval=1, batch_size=5)
     cycle_res = await worker.run_cycle()
     assert cycle_res["cycle"] == 1
+
+
+@pytest.mark.asyncio
+async def test_railway_and_docker_manifest_configurations():
+    """Verifies that Railway deployment manifests and Dockerfiles are properly configured for monorepo deployment."""
+    backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    repo_root = os.path.abspath(os.path.join(backend_dir, ".."))
+
+    # 1. Root railway.toml
+    root_railway = os.path.join(repo_root, "railway.toml")
+    assert os.path.exists(root_railway), "Root railway.toml missing."
+    with open(root_railway, "r", encoding="utf-8") as f:
+        root_toml_content = f.read()
+    assert 'builder = "DOCKERFILE"' in root_toml_content
+    assert "/api/v1/health/live" in root_toml_content
+
+    # 2. Backend railway.toml
+    backend_railway = os.path.join(backend_dir, "railway.toml")
+    assert os.path.exists(backend_railway), "backend/railway.toml missing for /backend root directory."
+    with open(backend_railway, "r", encoding="utf-8") as f:
+        backend_toml_content = f.read()
+    assert 'builder = "DOCKERFILE"' in backend_toml_content
+    assert 'dockerfilePath = "Dockerfile"' in backend_toml_content
+    assert "/api/v1/health/live" in backend_toml_content
+
+    # 3. Worker railway config
+    worker_railway = os.path.join(backend_dir, "railway.worker.toml")
+    assert os.path.exists(worker_railway), "backend/railway.worker.toml missing."
+    with open(worker_railway, "r", encoding="utf-8") as f:
+        worker_toml_content = f.read()
+    assert 'dockerfilePath = "Dockerfile.worker"' in worker_toml_content
+    assert "python worker.py" in worker_toml_content
+
+    # 4. Backend Dockerfile
+    backend_dockerfile = os.path.join(backend_dir, "Dockerfile")
+    assert os.path.exists(backend_dockerfile)
+    with open(backend_dockerfile, "r", encoding="utf-8") as f:
+        docker_content = f.read()
+    assert "0.0.0.0" in docker_content
+    assert "PORT" in docker_content
+    assert "uvicorn app.main:app" in docker_content
+
+    # 5. Worker Dockerfile
+    worker_dockerfile = os.path.join(backend_dir, "Dockerfile.worker")
+    assert os.path.exists(worker_dockerfile)
+    with open(worker_dockerfile, "r", encoding="utf-8") as f:
+        worker_docker_content = f.read()
+    assert "python" in worker_docker_content
+    assert "worker.py" in worker_docker_content
+    assert "uvicorn" not in worker_docker_content

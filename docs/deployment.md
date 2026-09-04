@@ -66,24 +66,28 @@ Production secrets must **NEVER** be committed to version control. They should b
 ### Option A: Railway (Recommended)
 1. **Connect Repository**: Link your GitHub repository in the Railway dashboard.
 2. **Add PostgreSQL Service**:
-   - Provision a PostgreSQL database.
-   - Note the `DATABASE_URL` variable provided by Railway.
-3. **Deploy Backend Web Service**:
-   - Set root directory: `/backend`
-   - Build command: `pip install -r requirements.txt`
-   - Start command: `sh -c 'uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}'`
-   - Healthcheck Path: `/api/v1/health/live`
-   - Set environment variables listed above.
-4. **Deploy Background Worker Service**:
-   - Add a new service from the same repo.
-   - Set root directory: `/backend`
-   - Start command: `python worker.py`
-   - Set matching `DATABASE_URL`, `SECRET_KEY`, `MAILBOX_ENCRYPTION_KEY`.
-5. **Deploy Frontend Service**:
-   - Set root directory: `/frontend`
-   - Build command: `npm run build`
-   - Start command: `npm start`
-   - Set `NEXT_PUBLIC_API_URL` to backend service public domain.
+   - Provision a PostgreSQL database (`ai-job-assistant-db`).
+   - Railway exposes the connection string as `DATABASE_URL`.
+3. **Configure Backend Web Service (`ai-job-assistant-backend`)**:
+   - **Root Directory**: `/backend`
+   - **Builder**: `Dockerfile` (Ensure "Build Command" is **EMPTY** so Railway builds via Dockerfile instead of Railpack).
+   - **Dockerfile Path**: `Dockerfile` (uses `backend/Dockerfile` and `backend/railway.toml`).
+   - **Start Command**: `sh -c 'uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}'`
+   - **Healthcheck Path**: `/api/v1/health/live`
+   - **Healthcheck Timeout**: `120`
+   - **Environment Variables**: Configure `DATABASE_URL`, `SECRET_KEY`, `MAILBOX_ENCRYPTION_KEY`, etc.
+4. **Configure Background Worker Service (`ai-job-assistant-worker`)**:
+   - In the same Railway project, click **New** -> **GitHub Repo** -> select the repository.
+   - **Root Directory**: `/backend`
+   - **Builder**: `Dockerfile` (Ensure "Build Command" is **EMPTY**).
+   - **Dockerfile Path**: `Dockerfile.worker` (or set environment variable `RAILWAY_DOCKERFILE_PATH = "Dockerfile.worker"`).
+   - **Healthcheck Path**: Leave **EMPTY** (Worker is a background daemon that does not bind an HTTP port).
+   - **Start Command**: `python worker.py`
+   - **Environment Variables**: Set matching `DATABASE_URL`, `SECRET_KEY`, `MAILBOX_ENCRYPTION_KEY`.
+5. **Frontend Deployment**:
+   - Deploy the `frontend/` directory to **Vercel** (preferred production architecture).
+   - Set `NEXT_PUBLIC_API_URL` to your Railway backend's public domain (e.g., `https://backend-production.up.railway.app/api/v1`).
+   - If Railway created an `ai-job-assistant-frontend` service, you can safely remove or disable it on Railway since Vercel handles the Next.js frontend.
 
 ### Option B: Render Blueprint
 Use the included `render.yaml` infrastructure-as-code file:

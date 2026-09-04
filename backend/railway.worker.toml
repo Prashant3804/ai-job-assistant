@@ -1,0 +1,11 @@
+# Railway Deployment Configuration for AI Job Assistant Background Worker Service
+# Active when Service Root Directory is set to /backend and Config Path is set to railway.worker.toml
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile.worker"
+
+[deploy]
+startCommand = "python worker.py"
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
