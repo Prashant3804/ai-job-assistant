@@ -1,0 +1,57 @@
+version: '3.8'
+
+services:
+  # PostgreSQL with pgvector extension
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: job_assistant_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: job_assistant
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Backend Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: job_assistant_backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgrespassword@db:5432/job_assistant
+      - DEFAULT_AI_PROVIDER=mock
+      - SECRET_KEY=production-secret-key-job-assistant-2026
+    ports:
+      - "8000:8000"
+    command: >
+      sh -c "python seed_data.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+  # Next.js Frontend Dashboard
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: job_assistant_frontend
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      - NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+    ports:
+      - "3000:3000"
+
+volumes:
+  postgres_data:

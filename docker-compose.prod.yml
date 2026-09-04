@@ -1,0 +1,114 @@
+version: '3.8'
+
+services:
+  # 1. Managed / Production PostgreSQL Database with pgvector
+  db:
+    image: pgvector/pgvector:pg16
+    container_name: job_assistant_prod_db
+    restart: always
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-job_assistant_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ChangeThisStrongPassword2026!}
+      POSTGRES_DB: ${POSTGRES_DB:-job_assistant_prod}
+    volumes:
+      - prod_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-job_assistant_user} -d ${POSTGRES_DB:-job_assistant_prod}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - job_assistant_net
+
+  # 2. Production FastAPI Backend Web Service
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: job_assistant_prod_backend
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - PORT=8000
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-job_assistant_user}:${POSTGRES_PASSWORD:-ChangeThisStrongPassword2026!}@db:5432/${POSTGRES_DB:-job_assistant_prod}
+      - SECRET_KEY=${SECRET_KEY}
+      - MAILBOX_ENCRYPTION_KEY=${MAILBOX_ENCRYPTION_KEY}
+      - DEFAULT_AI_PROVIDER=${DEFAULT_AI_PROVIDER:-mock}
+      - OMNIROUTE_BASE_URL=${OMNIROUTE_BASE_URL:-http://localhost:20128/v1}
+      - OMNIROUTE_API_KEY=${OMNIROUTE_API_KEY}
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET}
+      - GOOGLE_REDIRECT_URI=${GOOGLE_REDIRECT_URI}
+      - MICROSOFT_CLIENT_ID=${MICROSOFT_CLIENT_ID}
+      - MICROSOFT_CLIENT_SECRET=${MICROSOFT_CLIENT_SECRET}
+      - MICROSOFT_REDIRECT_URI=${MICROSOFT_REDIRECT_URI}
+      - BACKEND_CORS_ORIGINS=${BACKEND_CORS_ORIGINS}
+      - STORAGE_DIR=/app/uploads/resumes
+    volumes:
+      - prod_uploads:/app/uploads
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health/live || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+    networks:
+      - job_assistant_net
+
+  # 3. Production Background Worker Daemon
+  worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.worker
+    container_name: job_assistant_prod_worker
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    environment:
+      - ENVIRONMENT=production
+      - DEBUG=false
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-job_assistant_user}:${POSTGRES_PASSWORD:-ChangeThisStrongPassword2026!}@db:5432/${POSTGRES_DB:-job_assistant_prod}
+      - SECRET_KEY=${SECRET_KEY}
+      - MAILBOX_ENCRYPTION_KEY=${MAILBOX_ENCRYPTION_KEY}
+      - DEFAULT_AI_PROVIDER=${DEFAULT_AI_PROVIDER:-mock}
+      - OMNIROUTE_BASE_URL=${OMNIROUTE_BASE_URL:-http://localhost:20128/v1}
+      - OMNIROUTE_API_KEY=${OMNIROUTE_API_KEY}
+      - WORKER_LEASE_SECONDS=${WORKER_LEASE_SECONDS:-300}
+      - WORKER_HEARTBEAT_SECONDS=${WORKER_HEARTBEAT_SECONDS:-10}
+    volumes:
+      - prod_uploads:/app/uploads
+    networks:
+      - job_assistant_net
+
+  # 4. Production Next.js Frontend Dashboard
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: job_assistant_prod_frontend
+    restart: always
+    depends_on:
+      - backend
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://localhost:8000/api/v1}
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    networks:
+      - job_assistant_net
+
+networks:
+  job_assistant_net:
+    driver: bridge
+
+volumes:
+  prod_postgres_data:
+  prod_uploads:

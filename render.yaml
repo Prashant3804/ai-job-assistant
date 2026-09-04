@@ -1,0 +1,82 @@
+# Render Blueprint Infrastructure Configuration
+# AI Job Assistant: Frontend, Backend, Background Worker, and Managed PostgreSQL
+
+services:
+  # 1. FastAPI Backend Web Service
+  - type: web
+    name: ai-job-assistant-backend
+    runtime: python
+    rootDir: backend
+    buildCommand: "pip install --no-cache-dir -r requirements.txt"
+    startCommand: "sh -c 'uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}'"
+    healthCheckPath: /api/v1/health/live
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-job-assistant-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: MAILBOX_ENCRYPTION_KEY
+        generateValue: true
+      - key: OMNIROUTE_API_KEY
+        sync: false
+      - key: BACKEND_CORS_ORIGINS
+        value: "https://ai-job-assistant-frontend.onrender.com"
+
+  # 2. Asynchronous Background Worker
+  - type: worker
+    name: ai-job-assistant-worker
+    runtime: python
+    rootDir: backend
+    buildCommand: "pip install --no-cache-dir -r requirements.txt"
+    startCommand: "python worker.py"
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: DEBUG
+        value: false
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-job-assistant-db
+          property: connectionString
+      - key: SECRET_KEY
+        fromService:
+          type: web
+          name: ai-job-assistant-backend
+          envVarKey: SECRET_KEY
+      - key: MAILBOX_ENCRYPTION_KEY
+        fromService:
+          type: web
+          name: ai-job-assistant-backend
+          envVarKey: MAILBOX_ENCRYPTION_KEY
+      - key: OMNIROUTE_API_KEY
+        sync: false
+
+  # 3. Next.js Frontend Dashboard Web Service
+  - type: web
+    name: ai-job-assistant-frontend
+    runtime: node
+    rootDir: frontend
+    buildCommand: "npm ci && npm run build"
+    startCommand: "npm start"
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NEXT_PUBLIC_API_URL
+        value: "https://ai-job-assistant-backend.onrender.com/api/v1"
+
+databases:
+  # 4. Managed PostgreSQL Database with pgvector
+  - name: ai-job-assistant-db
+    databaseName: job_assistant_prod
+    user: job_assistant_user
+    plan: standard
+    postgresMajorVersion: 16
