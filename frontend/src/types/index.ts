@@ -488,8 +488,8 @@ export interface ApplicationPolicy {
   blocked_companies: string[];
   blocked_keywords: string[];
   allowed_employment_types: string[];
-  daily_application_limit: number;
-  per_source_daily_limit: number;
+  daily_application_limit?: number | null;
+  per_source_daily_limit?: number | null;
   duplicate_protection: boolean;
   allow_entry_level: boolean;
   allow_internships: boolean;
@@ -512,8 +512,8 @@ export interface ApplicationPolicyUpdate {
   blocked_companies?: string[];
   blocked_keywords?: string[];
   allowed_employment_types?: string[];
-  daily_application_limit?: number;
-  per_source_daily_limit?: number;
+  daily_application_limit?: number | null;
+  per_source_daily_limit?: number | null;
   duplicate_protection?: boolean;
   allow_entry_level?: boolean;
   allow_internships?: boolean;
@@ -524,9 +524,13 @@ export interface ApplicationPolicyUpdate {
 
 export interface AutoApplyStatus {
   auto_apply_enabled: boolean;
-  daily_application_limit: number;
+  minimum_match_score?: number;
+  daily_application_limit?: number | null;
+  daily_limit_enabled?: boolean;
+  daily_limit_label?: string;
+  applications_submitted_today?: number;
   today_applications_count: number;
-  remaining_daily_quota: number;
+  remaining_daily_quota?: number | null;
   pending_queue_count: number;
   total_applied: number;
   total_failed: number;
@@ -1178,8 +1182,8 @@ export interface AutoApplyPolicyConfig {
   blocked_companies: string[];
   blocked_keywords: string[];
   allowed_employment_types: string[];
-  daily_application_limit: number;
-  per_source_daily_limit: number;
+  daily_application_limit?: number | null;
+  per_source_daily_limit?: number | null;
   per_company_limit: number;
   duplicate_protection: boolean;
   require_complete_profile: boolean;

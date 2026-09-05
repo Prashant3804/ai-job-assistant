@@ -169,9 +169,11 @@ class GetAutoApplyStatusTool(BaseTool):
         status_data = await service.get_auto_apply_status(user_id)
         d = status_data.model_dump()
         enabled_str = "ENABLED" if d["auto_apply_enabled"] else "DISABLED"
+        limit_str = d["daily_limit_label"] if "daily_limit_label" in d else ("Unlimited" if d.get("daily_application_limit") is None else str(d["daily_application_limit"]))
+        quota_str = str(d["remaining_daily_quota"]) if d.get("remaining_daily_quota") is not None else "Unlimited"
         summary = (
-            f"Auto-Apply Status: {enabled_str}. Daily Limit: {d['daily_application_limit']}, "
-            f"Submitted Today: {d['applications_submitted_today']}, Remaining Quota: {d['remaining_daily_quota']}, "
+            f"Auto-Apply Status: {enabled_str}. Daily Limit: {limit_str}, "
+            f"Submitted Today: {d['applications_submitted_today']}, Remaining Quota: {quota_str}, "
             f"Queued: {d['queued_applications_count']}."
         )
         return ToolResult(tool_name=self.name, success=True, summary=summary, data=d)
@@ -198,9 +200,10 @@ class GetAutoApplyPolicyTool(BaseTool):
             "allow_hybrid": policy.allow_hybrid,
             "allow_onsite": policy.allow_onsite
         }
+        limit_str = f"{policy.daily_application_limit}/day" if policy.daily_application_limit is not None else "Unlimited"
         summary = (
             f"Auto-Apply Policy: Enabled={d['auto_apply_enabled']}, Min Score={d['minimum_match_score']}%, "
-            f"Daily Limit={d['daily_application_limit']}, Blocked Companies={len(d['blocked_companies'])}, "
+            f"Daily Limit={limit_str}, Blocked Companies={len(d['blocked_companies'])}, "
             f"Blocked Keywords={len(d['blocked_keywords'])}."
         )
         return ToolResult(tool_name=self.name, success=True, summary=summary, data=d)

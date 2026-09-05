@@ -25,8 +25,8 @@ export default function AutoApplySettingsPage() {
   // Policy form states
   const [enabled, setEnabled] = useState(false);
   const [minScore, setMinScore] = useState(85);
-  const [dailyLimit, setDailyLimit] = useState(30);
-  const [perSourceLimit, setPerSourceLimit] = useState(10);
+  const [dailyLimit, setDailyLimit] = useState<number | ''>('');
+  const [perSourceLimit, setPerSourceLimit] = useState<number | ''>('');
   const [perCompanyLimit, setPerCompanyLimit] = useState(3);
   const [requireComplete, setRequireComplete] = useState(true);
   const [duplicateProtection, setDuplicateProtection] = useState(true);
@@ -45,8 +45,8 @@ export default function AutoApplySettingsPage() {
       setPolicy(data);
       setEnabled(data.auto_apply_enabled);
       setMinScore(data.minimum_match_score || 85);
-      setDailyLimit(data.daily_application_limit || 30);
-      setPerSourceLimit(data.per_source_daily_limit || 10);
+      setDailyLimit(data.daily_application_limit ?? '');
+      setPerSourceLimit(data.per_source_daily_limit ?? '');
       setPerCompanyLimit(data.per_company_limit || 3);
       setRequireComplete(data.require_complete_profile ?? true);
       setDuplicateProtection(data.duplicate_protection ?? true);
@@ -67,8 +67,8 @@ export default function AutoApplySettingsPage() {
       const payload: Partial<AutoApplyPolicyConfig> = {
         auto_apply_enabled: enabled,
         minimum_match_score: Number(minScore),
-        daily_application_limit: Number(dailyLimit),
-        per_source_daily_limit: Number(perSourceLimit),
+        daily_application_limit: dailyLimit === '' ? null : Number(dailyLimit),
+        per_source_daily_limit: perSourceLimit === '' ? null : Number(perSourceLimit),
         per_company_limit: Number(perCompanyLimit),
         require_complete_profile: requireComplete,
         duplicate_protection: duplicateProtection,
@@ -182,26 +182,56 @@ export default function AutoApplySettingsPage() {
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-300 block mb-1">
-                Global Daily Application Limit
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-slate-300">
+                  Global Daily Application Limit
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setDailyLimit(dailyLimit === '' ? 30 : '')}
+                  className="text-[10px] text-sky-400 hover:text-sky-300 font-medium"
+                >
+                  {dailyLimit === '' ? 'Set Cap' : 'Unlimited'}
+                </button>
+              </div>
               <input
                 type="number"
+                min="1"
+                placeholder="Unlimited (no daily cap)"
                 value={dailyLimit}
-                onChange={(e) => setDailyLimit(Number(e.target.value))}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+                onChange={(e) => {
+                  const val = e.target.value.trim();
+                  setDailyLimit(val === '' ? '' : Number(val));
+                }}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500"
               />
+              <span className="text-[10px] text-slate-500 mt-1 block">Leave blank for Unlimited</span>
             </div>
             <div>
-              <label className="text-xs font-medium text-slate-300 block mb-1">
-                Per-Platform Daily Limit
-              </label>
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs font-medium text-slate-300">
+                  Per-Platform Daily Limit
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setPerSourceLimit(perSourceLimit === '' ? 10 : '')}
+                  className="text-[10px] text-sky-400 hover:text-sky-300 font-medium"
+                >
+                  {perSourceLimit === '' ? 'Set Cap' : 'Unlimited'}
+                </button>
+              </div>
               <input
                 type="number"
+                min="1"
+                placeholder="Unlimited"
                 value={perSourceLimit}
-                onChange={(e) => setPerSourceLimit(Number(e.target.value))}
-                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
+                onChange={(e) => {
+                  const val = e.target.value.trim();
+                  setPerSourceLimit(val === '' ? '' : Number(val));
+                }}
+                className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white placeholder:text-slate-500"
               />
+              <span className="text-[10px] text-slate-500 mt-1 block">Leave blank for Unlimited</span>
             </div>
             <div>
               <label className="text-xs font-medium text-slate-300 block mb-1">

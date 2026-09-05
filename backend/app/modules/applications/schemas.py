@@ -17,8 +17,8 @@ class ApplicationPolicyBase(BaseModel):
     blocked_keywords: List[str] = Field(default_factory=list)
     allowed_employment_types: List[str] = Field(default_factory=list)
 
-    daily_application_limit: int = Field(30, ge=1, le=200)
-    per_source_daily_limit: int = Field(10, ge=1, le=100)
+    daily_application_limit: Optional[int] = Field(None, ge=1)
+    per_source_daily_limit: Optional[int] = Field(None, ge=1)
     duplicate_protection: bool = True
 
     allow_entry_level: bool = True
@@ -41,8 +41,8 @@ class ApplicationPolicyUpdate(BaseModel):
     blocked_keywords: Optional[List[str]] = None
     allowed_employment_types: Optional[List[str]] = None
 
-    daily_application_limit: Optional[int] = Field(None, ge=1, le=200)
-    per_source_daily_limit: Optional[int] = Field(None, ge=1, le=100)
+    daily_application_limit: Optional[int] = Field(None, ge=1)
+    per_source_daily_limit: Optional[int] = Field(None, ge=1)
     duplicate_protection: Optional[bool] = None
 
     allow_entry_level: Optional[bool] = None
@@ -63,9 +63,11 @@ class ApplicationPolicyRead(ApplicationPolicyBase):
 class AutoApplyStatusRead(BaseModel):
     auto_apply_enabled: bool
     minimum_match_score: float
-    daily_application_limit: int
+    daily_application_limit: Optional[int] = None
+    daily_limit_enabled: bool = False
+    daily_limit_label: str = "Unlimited"
     applications_submitted_today: int
-    remaining_daily_quota: int
+    remaining_daily_quota: Optional[int] = None
     queued_applications_count: int
     successful_applications_count: int
     failed_applications_count: int

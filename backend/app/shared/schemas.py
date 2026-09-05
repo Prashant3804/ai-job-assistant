@@ -401,8 +401,8 @@ class ApplicationPolicyUpdate(BaseModel):
     blocked_companies: List[str] = []
     blocked_keywords: List[str] = []
     allowed_employment_types: List[str] = ["FULL_TIME"]
-    daily_application_limit: int = 30
-    per_source_daily_limit: int = 10
+    daily_application_limit: Optional[int] = None
+    per_source_daily_limit: Optional[int] = None
     per_company_limit: int = 3
     duplicate_protection: bool = True
     require_complete_profile: bool = True

@@ -58,8 +58,8 @@ class ApplicationService:
                 user_id=user_id,
                 auto_apply_enabled=False,
                 minimum_match_score=85.0,
-                daily_application_limit=30,
-                per_source_daily_limit=10,
+                daily_application_limit=None,
+                per_source_daily_limit=None,
                 duplicate_protection=True,
                 allow_entry_level=True,
                 allow_internships=True,
@@ -111,12 +111,18 @@ class ApplicationService:
         skipped = sum(v for k, v in counts_by_status.items() if k in [ApplicationStatus.BLOCKED.value, ApplicationStatus.POLICY_PENDING.value, ApplicationStatus.DUPLICATE.value])
         unsupported = counts_by_status.get(ApplicationStatus.AUTO_APPLY_UNSUPPORTED.value, 0)
 
+        is_limited = policy.daily_application_limit is not None
+        remaining = max(0, policy.daily_application_limit - today_count) if is_limited else None
+        limit_label = f"{policy.daily_application_limit}/day" if is_limited else "Unlimited"
+
         return AutoApplyStatusRead(
             auto_apply_enabled=policy.auto_apply_enabled,
             minimum_match_score=policy.minimum_match_score,
             daily_application_limit=policy.daily_application_limit,
+            daily_limit_enabled=is_limited,
+            daily_limit_label=limit_label,
             applications_submitted_today=today_count,
-            remaining_daily_quota=max(0, policy.daily_application_limit - today_count),
+            remaining_daily_quota=remaining,
             queued_applications_count=queue_count,
             successful_applications_count=successful,
             failed_applications_count=failed,

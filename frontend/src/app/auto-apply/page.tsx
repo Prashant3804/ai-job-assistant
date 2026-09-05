@@ -159,8 +159,9 @@ export default function AutoApplyDashboard() {
     );
   }
 
-  const quotaPercent = status && status.daily_application_limit > 0
-    ? Math.min(100, Math.round((status.today_applications_count / status.daily_application_limit) * 100))
+  const isDailyLimited = typeof status?.daily_application_limit === 'number' && status.daily_application_limit > 0;
+  const quotaPercent = isDailyLimited && status?.daily_application_limit
+    ? Math.min(100, Math.round(((status.today_applications_count ?? status.applications_submitted_today ?? 0) / status.daily_application_limit) * 100))
     : 0;
 
   return (
@@ -245,23 +246,36 @@ export default function AutoApplyDashboard() {
           {/* Daily Quota Card */}
           <div className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col justify-between">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">Today&apos;s Quota</span>
+              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                {isDailyLimited ? "Today's Quota" : "Today's Applications"}
+              </span>
               <Activity className="w-4 h-4 text-sky-500" />
             </div>
             <div className="my-3">
               <div className="flex items-baseline gap-2">
-                <span className="text-2xl font-black text-slate-900">{status?.today_applications_count || 0}</span>
-                <span className="text-sm font-medium text-slate-400">/ {policy?.daily_application_limit || 30} max</span>
+                <span className="text-2xl font-black text-slate-900">{status?.today_applications_count ?? status?.applications_submitted_today ?? 0}</span>
+                <span className="text-sm font-medium text-slate-400">
+                  {isDailyLimited ? `/ ${status?.daily_application_limit} max` : '/ Unlimited'}
+                </span>
               </div>
-              <div className="w-full bg-slate-100 rounded-full h-2 mt-2 overflow-hidden">
-                <div
-                  className={`h-full transition-all ${quotaPercent >= 90 ? 'bg-rose-500' : 'bg-sky-500'}`}
-                  style={{ width: `${quotaPercent}%` }}
-                />
-              </div>
+              {isDailyLimited ? (
+                <div className="w-full bg-slate-100 rounded-full h-2 mt-2 overflow-hidden">
+                  <div
+                    className={`h-full transition-all ${quotaPercent >= 90 ? 'bg-rose-500' : 'bg-sky-500'}`}
+                    style={{ width: `${quotaPercent}%` }}
+                  />
+                </div>
+              ) : (
+                <div className="mt-2 text-xs font-medium text-emerald-600 flex items-center gap-1.5">
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"></span>
+                  True Unlimited Mode Active
+                </div>
+              )}
             </div>
             <span className="text-xs text-slate-500 font-medium">
-              {status?.remaining_daily_quota || 0} submissions remaining today
+              {isDailyLimited
+                ? `${status?.remaining_daily_quota ?? 0} submissions remaining today`
+                : "Unlimited applications subject to platform/provider limits."}
             </span>
           </div>
 
@@ -495,26 +509,52 @@ export default function AutoApplyDashboard() {
                 {/* Daily Limits */}
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Global Daily Limit</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700">Global Daily Limit</label>
+                      <button
+                        type="button"
+                        onClick={() => setPolicy({ ...policy, daily_application_limit: policy.daily_application_limit ? null : 30 })}
+                        className="text-[10px] font-semibold text-sky-600 hover:text-sky-700"
+                      >
+                        {policy.daily_application_limit ? 'Set Unlimited' : 'Set Cap'}
+                      </button>
+                    </div>
                     <input
                       type="number"
                       min="1"
-                      max="100"
-                      value={policy.daily_application_limit}
-                      onChange={(e) => setPolicy({ ...policy, daily_application_limit: Number(e.target.value) })}
+                      placeholder="Unlimited (no daily cap)"
+                      value={policy.daily_application_limit ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value.trim();
+                        setPolicy({ ...policy, daily_application_limit: val === '' ? null : Number(val) });
+                      }}
                       className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200"
                     />
+                    <span className="text-[10px] text-slate-400 mt-1 block">Leave blank for Unlimited</span>
                   </div>
                   <div>
-                    <label className="text-xs font-bold text-slate-700 block mb-1">Per-Source Daily Limit</label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="text-xs font-bold text-slate-700">Per-Source Limit</label>
+                      <button
+                        type="button"
+                        onClick={() => setPolicy({ ...policy, per_source_daily_limit: policy.per_source_daily_limit ? null : 10 })}
+                        className="text-[10px] font-semibold text-sky-600 hover:text-sky-700"
+                      >
+                        {policy.per_source_daily_limit ? 'Set Unlimited' : 'Set Cap'}
+                      </button>
+                    </div>
                     <input
                       type="number"
                       min="1"
-                      max="50"
-                      value={policy.per_source_daily_limit}
-                      onChange={(e) => setPolicy({ ...policy, per_source_daily_limit: Number(e.target.value) })}
+                      placeholder="Unlimited"
+                      value={policy.per_source_daily_limit ?? ''}
+                      onChange={(e) => {
+                        const val = e.target.value.trim();
+                        setPolicy({ ...policy, per_source_daily_limit: val === '' ? null : Number(val) });
+                      }}
                       className="w-full px-3 py-2 text-sm rounded-xl border border-slate-200"
                     />
+                    <span className="text-[10px] text-slate-400 mt-1 block">Leave blank for Unlimited</span>
                   </div>
                 </div>
 

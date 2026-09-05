@@ -111,6 +111,9 @@ class Settings(BaseSettings):
         "application/msword"
     ]
 
+    # Auto-Apply Quotas & Concurrency (None = true unlimited applications)
+    AUTO_APPLY_DAILY_LIMIT: Optional[int] = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",

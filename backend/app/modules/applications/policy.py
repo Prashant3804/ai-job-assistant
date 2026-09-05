@@ -20,12 +20,12 @@ class ApplicationPolicyEngine:
         if not policy or not policy.auto_apply_enabled:
             return False, PolicyDecision.SKIP_LOW_MATCH, "Auto-apply is not enabled in candidate settings."
 
-        # 2. Daily Global Limit Check
-        if daily_applications_count >= policy.daily_application_limit:
+        # 2. Daily Global Limit Check (if configured; None = unlimited)
+        if policy.daily_application_limit is not None and daily_applications_count >= policy.daily_application_limit:
             return False, PolicyDecision.SKIP_DAILY_LIMIT, f"Daily application limit ({policy.daily_application_limit}) reached for today."
 
-        # 3. Per-Source Daily Limit Check
-        if source_daily_applications_count >= policy.per_source_daily_limit:
+        # 3. Per-Source Daily Limit Check (if configured; None = unlimited)
+        if policy.per_source_daily_limit is not None and source_daily_applications_count >= policy.per_source_daily_limit:
             source_name = job.job_source.name if (hasattr(job, 'job_source') and job.job_source) else getattr(job, 'source', "Platform")
             return False, PolicyDecision.SKIP_DAILY_LIMIT, f"Daily limit for source '{source_name}' ({policy.per_source_daily_limit}) reached for today."
 
