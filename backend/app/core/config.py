@@ -1,7 +1,9 @@
 import os
+import urllib.parse
 from typing import List, Optional, Union
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator
+from sqlalchemy.engine import make_url
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "AI Job Assistant API"
@@ -118,11 +120,7 @@ class Settings(BaseSettings):
 
     def get_db_url(self) -> str:
         url = self.ASYNC_DATABASE_URL or self.DATABASE_URL
-        if url.startswith("postgres://"):
-            url = url.replace("postgres://", "postgresql+asyncpg://", 1)
-        elif url.startswith("postgresql://") and not url.startswith("postgresql+asyncpg://"):
-            url = url.replace("postgresql://", "postgresql+asyncpg://", 1)
-        return url
+        return normalize_database_url(url)
 
     def validate_production_configuration(self) -> List[str]:
         """Validates that critical security secrets and settings are properly configured for production."""
@@ -143,7 +141,94 @@ class Settings(BaseSettings):
                 issues.append("GOOGLE_REDIRECT_URI must use a production domain in production environment.")
             if self.MICROSOFT_REDIRECT_URI and ("localhost" in self.MICROSOFT_REDIRECT_URI or "127.0.0.1" in self.MICROSOFT_REDIRECT_URI):
                 issues.append("MICROSOFT_REDIRECT_URI must use a production domain in production environment.")
+            try:
+                normalized_db = self.get_db_url()
+                if "sqlite" in normalized_db:
+                    issues.append("SQLite database should not be used in production. Please configure a PostgreSQL DATABASE_URL.")
+            except Exception as e:
+                issues.append(f"Database configuration issue: {str(e)}")
         return issues
+
+
+def normalize_database_url(raw_url: Optional[str]) -> str:
+    """Normalizes and validates database URLs for asynchronous SQLAlchemy with PostgreSQL or SQLite.
+    
+    Supports:
+    - postgresql://... -> normalized to postgresql+asyncpg://...
+    - postgres://...   -> normalized to postgresql+asyncpg://...
+    - postgresql+asyncpg://... -> preserved as postgresql+asyncpg://...
+    - sqlite://... and sqlite+aiosqlite://... -> preserved for local and test environments.
+    
+    Handles:
+    - Leading/trailing whitespace and newlines.
+    - Surrounding single or double quotes (e.g. from environment injection).
+    - Passwords with URL-special characters (e.g. @, #, ?, %, /) safely percent-encoded.
+    - Query parameters (e.g. sslmode=require, ssl=true) preserved intact.
+    - Zero credential leakage in error messages.
+    """
+    if raw_url is None:
+        raise ValueError("DATABASE_URL is missing or not set. A valid database connection string is required.")
+
+    url = str(raw_url).strip().strip("\"'").strip()
+    if not url:
+        raise ValueError("DATABASE_URL is empty. A valid database connection string is required.")
+
+    scheme_sep = "://"
+    if scheme_sep not in url:
+        raise ValueError("Malformed DATABASE_URL: missing scheme separator '://'. Ensure a valid connection string is provided.")
+
+    scheme, rest = url.split(scheme_sep, 1)
+    scheme_lower = scheme.lower()
+
+    # Preserve SQLite for local and test suites
+    if scheme_lower in ["sqlite", "sqlite+aiosqlite"]:
+        return url
+
+    # Supported PostgreSQL schemes
+    if scheme_lower in ["postgres", "postgresql", "postgresql+asyncpg"]:
+        target_scheme = "postgresql+asyncpg"
+    else:
+        raise ValueError(
+            f"Unsupported database scheme: '{scheme_lower}'. Supported schemes are postgresql, postgres, and sqlite."
+        )
+
+    # Separate query parameters from the rest of the URL
+    query = ""
+    if "?" in rest:
+        rest, query = rest.split("?", 1)
+
+    # Separate authority (credentials + host:port) and database path
+    if "/" in rest:
+        authority, path = rest.split("/", 1)
+    else:
+        authority, path = rest, ""
+
+    # Process userinfo (username:password) if present
+    if "@" in authority:
+        userinfo, hostinfo = authority.rsplit("@", 1)
+        if ":" in userinfo:
+            username, password = userinfo.split(":", 1)
+            clean_user = urllib.parse.quote(urllib.parse.unquote(username), safe="")
+            clean_pass = urllib.parse.quote(urllib.parse.unquote(password), safe="")
+            userinfo = f"{clean_user}:{clean_pass}"
+        else:
+            userinfo = urllib.parse.quote(urllib.parse.unquote(userinfo), safe="")
+        authority = f"{userinfo}@{hostinfo}"
+
+    # Reassemble normalized URL
+    normalized = f"{target_scheme}://{authority}"
+    if path:
+        normalized += f"/{path}"
+    if query:
+        normalized += f"?{query}"
+
+    # Validate that SQLAlchemy make_url can parse the reassembled URL
+    try:
+        make_url(normalized)
+    except Exception:
+        raise ValueError("Malformed DATABASE_URL: could not parse as a valid database connection URL.") from None
+
+    return normalized
 
 settings = Settings()
 

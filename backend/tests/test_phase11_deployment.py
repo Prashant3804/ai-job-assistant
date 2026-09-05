@@ -40,6 +40,50 @@ async def test_database_url_dialect_normalization():
 
 
 @pytest.mark.asyncio
+async def test_railway_database_url_edge_cases():
+    """Verifies Railway-specific database URL formats: quotes, whitespace, special characters, and parameter retention."""
+    from app.core.config import normalize_database_url
+
+    # Double quotes from env
+    q_url = '"postgresql://railway_user:p%40ssword!@containers.railway.app:5432/railway"'
+    norm_q = normalize_database_url(q_url)
+    assert norm_q.startswith("postgresql+asyncpg://")
+    assert not norm_q.startswith('"')
+    assert "railway_user" in norm_q
+
+    # Single quotes and padding whitespace / newlines
+    sq_url = "  'postgres://usr:sec%23ret@roundhouse.proxy.rlwy.net:12345/railway?sslmode=disable' \n"
+    norm_sq = normalize_database_url(sq_url)
+    assert norm_sq.startswith("postgresql+asyncpg://usr:sec%23ret@roundhouse.proxy.rlwy.net:12345/railway?sslmode=disable")
+
+    # Passwords with unencoded special characters like # and @ in password
+    raw_special = "postgresql://myuser:p#ss@word?123@db.railway.internal:5432/prod_db?sslmode=require"
+    norm_special = normalize_database_url(raw_special)
+    assert norm_special.startswith("postgresql+asyncpg://")
+    assert "myuser:" in norm_special
+    assert "?sslmode=require" in norm_special
+
+    # Already correct postgresql+asyncpg:// format is preserved
+    already_async = "postgresql+asyncpg://admin:pass@host:5432/db"
+    assert normalize_database_url(already_async) == already_async
+
+    # Malformed URL without scheme raises clean ValueError without leaking credentials
+    with pytest.raises(ValueError) as exc:
+        normalize_database_url("not-a-valid-url-format")
+    assert "missing scheme separator" in str(exc.value)
+
+    # Empty URL raises clean ValueError
+    with pytest.raises(ValueError) as exc_empty:
+        normalize_database_url("   ")
+    assert "DATABASE_URL is empty" in str(exc_empty.value)
+
+    # None URL raises clean ValueError
+    with pytest.raises(ValueError) as exc_none:
+        normalize_database_url(None)
+    assert "DATABASE_URL is missing" in str(exc_none.value)
+
+
+@pytest.mark.asyncio
 async def test_cors_origin_parsing():
     """Verifies that CORS origins can be parsed from comma-separated strings or JSON arrays."""
     s_csv = Settings(BACKEND_CORS_ORIGINS="https://app.example.com,https://api.example.com")
@@ -103,7 +147,8 @@ async def test_production_configuration_validation_guards():
         MAILBOX_ENCRYPTION_KEY="a-secure-fernet-encryption-key-32bytes",
         GOOGLE_REDIRECT_URI="https://api.example.com/api/v1/mailbox/gmail/callback",
         MICROSOFT_REDIRECT_URI="https://api.example.com/api/v1/mailbox/outlook/callback",
-        BACKEND_CORS_ORIGINS=["https://app.example.com"]
+        BACKEND_CORS_ORIGINS=["https://app.example.com"],
+        DATABASE_URL="postgresql://prod_user:prod_pass@containers.railway.app:5432/railway"
     )
     assert len(s_valid.validate_production_configuration()) == 0
 

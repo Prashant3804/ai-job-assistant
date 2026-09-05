@@ -3,7 +3,14 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 from app.core.config import settings
 from app.database.base import Base
 
-db_url = settings.get_db_url()
+import logging
+logger = logging.getLogger(__name__)
+
+try:
+    db_url = settings.get_db_url()
+except Exception as e:
+    logger.error("Failed to parse or normalize database connection URL from settings.")
+    raise RuntimeError("Invalid database configuration. Please verify your DATABASE_URL environment variable.") from None
 
 # Configure engine kwargs depending on dialect
 engine_kwargs = {"echo": False}
@@ -15,7 +22,11 @@ else:
     engine_kwargs["pool_size"] = 10
     engine_kwargs["max_overflow"] = 20
 
-async_engine = create_async_engine(db_url, **engine_kwargs)
+try:
+    async_engine = create_async_engine(db_url, **engine_kwargs)
+except Exception as e:
+    logger.error("Failed to initialize SQLAlchemy async database engine.")
+    raise RuntimeError("Could not initialize database connection engine. Please check your DATABASE_URL.") from None
 
 AsyncSessionLocal = async_sessionmaker(
     bind=async_engine,
