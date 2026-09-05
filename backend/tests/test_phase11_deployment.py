@@ -84,6 +84,45 @@ async def test_railway_database_url_edge_cases():
 
 
 @pytest.mark.asyncio
+async def test_email_validator_dependency_and_schema_loading():
+    """Regression test: verifies email-validator is importable and UserRegisterRequest/UserLoginRequest Pydantic schemas build and validate correctly."""
+    import email_validator
+    assert email_validator is not None
+
+    from app.shared.schemas import UserRegisterRequest, UserLoginRequest
+    from pydantic import ValidationError
+
+    # Valid emails succeed
+    reg = UserRegisterRequest(
+        email="test.candidate@example.com",
+        password="ValidPassword123!",
+        full_name="Valid Candidate"
+    )
+    assert reg.email == "test.candidate@example.com"
+
+    login = UserLoginRequest(
+        email="test.candidate@example.com",
+        password="ValidPassword123!"
+    )
+    assert login.email == "test.candidate@example.com"
+
+    # Invalid email formats fail with Pydantic validation error
+    with pytest.raises(ValidationError):
+        UserRegisterRequest(
+            email="invalid-email-no-at",
+            password="ValidPassword123!",
+            full_name="Invalid Candidate"
+        )
+
+    # Verify requirements.txt explicitly declares email-validator
+    backend_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+    req_path = os.path.join(backend_dir, "requirements.txt")
+    with open(req_path, "r", encoding="utf-8") as f:
+        req_content = f.read()
+    assert "email-validator" in req_content
+
+
+@pytest.mark.asyncio
 async def test_cors_origin_parsing():
     """Verifies that CORS origins can be parsed from comma-separated strings or JSON arrays."""
     s_csv = Settings(BACKEND_CORS_ORIGINS="https://app.example.com,https://api.example.com")
