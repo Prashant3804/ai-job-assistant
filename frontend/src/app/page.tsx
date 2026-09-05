@@ -45,12 +45,12 @@ export default function DashboardPage() {
   }
 
   const metrics = data?.metrics || {
-    jobs_found: 6,
-    recommended_jobs: 3,
-    applications_total: 4,
-    interviews: 1,
-    offers: 1,
-    pending_applications: 2,
+    jobs_found: 0,
+    recommended_jobs: 0,
+    applications_total: 0,
+    interviews: 0,
+    offers: 0,
+    pending_applications: 0,
   };
 
   return (
@@ -89,18 +89,18 @@ export default function DashboardPage() {
           <MetricCard
             title="Interviews"
             value={metrics.interviews}
-            subtitle="1 scheduled this week"
+            subtitle={metrics.interviews > 0 ? `${metrics.interviews} scheduled` : 'No upcoming interviews'}
             icon={Calendar}
             color="amber"
-            badge="Active"
+            badge={metrics.interviews > 0 ? 'Active' : undefined}
           />
           <MetricCard
             title="Offers"
             value={metrics.offers}
-            subtitle="Anthropic ($245k)"
+            subtitle={metrics.offers > 0 ? `${metrics.offers} active offers` : 'No active offers'}
             icon={Award}
             color="emerald"
-            badge="Offer"
+            badge={metrics.offers > 0 ? 'Offer' : undefined}
           />
           <MetricCard
             title="Pending Applications"

@@ -30,16 +30,56 @@ export function Header({ title, subtitle, actionButton }: HeaderProps) {
         </Link>
 
         {/* User Avatar Pill */}
-        <div className="flex items-center gap-3 pl-2 border-l border-slate-200">
-          <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-slate-700 font-bold text-xs">
-            AM
-          </div>
-          <div className="hidden md:block text-left text-xs">
-            <div className="font-semibold text-slate-800">Alex Mercer</div>
-            <div className="text-slate-400">Senior AI Engineer</div>
-          </div>
-        </div>
+        <UserPill />
       </div>
     </header>
+  );
+}
+
+function UserPill() {
+  const [user, setUser] = React.useState<{ full_name?: string; headline?: string } | null>(null);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    import('@/lib/api').then(({ api }) => {
+      api.getMe()
+        .then((u) => {
+          if (isMounted && u) {
+            setUser({
+              full_name: u.full_name || 'Candidate',
+              headline: u.profile?.headline || 'Job Seeker',
+            });
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setUser({ full_name: 'Candidate', headline: 'Active Profile' });
+          }
+        });
+    });
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const name = user?.full_name || 'Candidate';
+  const headline = user?.headline || 'Active Profile';
+  const initials = name
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((p) => p[0].toUpperCase())
+    .join('') || 'CA';
+
+  return (
+    <div className="flex items-center gap-3 pl-2 border-l border-slate-200">
+      <div className="w-8 h-8 rounded-full bg-slate-100 border border-slate-300 flex items-center justify-center text-slate-700 font-bold text-xs">
+        {initials}
+      </div>
+      <div className="hidden md:block text-left text-xs">
+        <div className="font-semibold text-slate-800">{name}</div>
+        <div className="text-slate-400">{headline}</div>
+      </div>
+    </div>
   );
 }

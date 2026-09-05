@@ -17,10 +17,10 @@ import { api } from '@/lib/api';
 
 export default function SettingsPage() {
   const [provider, setProvider] = useState('mock');
-  const [targetRoles, setTargetRoles] = useState('Senior Backend Engineer, AI Systems Engineer, Full Stack Architect');
-  const [desiredLocations, setDesiredLocations] = useState('Remote, San Francisco, CA, New York, NY, Austin, TX');
-  const [minSalary, setMinSalary] = useState(160000);
-  const [remoteOnly, setRemoteOnly] = useState(true);
+  const [targetRoles, setTargetRoles] = useState('');
+  const [desiredLocations, setDesiredLocations] = useState('');
+  const [minSalary, setMinSalary] = useState(0);
+  const [remoteOnly, setRemoteOnly] = useState(false);
   const [connectors, setConnectors] = useState<any[]>([]);
   const [saved, setSaved] = useState(false);
 
@@ -30,8 +30,18 @@ export default function SettingsPage() {
 
   async function loadSettings() {
     try {
-      const connRes = await api.getConnectors();
+      const [connRes, userRes] = await Promise.all([
+        api.getConnectors().catch(() => []),
+        api.getMe().catch(() => null),
+      ]);
       setConnectors(Array.isArray(connRes) ? connRes : (connRes as any)?.data || []);
+      if (userRes && userRes.job_preferences && userRes.job_preferences.length > 0) {
+        const pref = userRes.job_preferences[0];
+        setTargetRoles((pref.desired_titles || []).join(', '));
+        setDesiredLocations((pref.desired_locations || []).join(', '));
+        setMinSalary(pref.min_base_salary || 0);
+        setRemoteOnly(Array.isArray(pref.remote_types) && pref.remote_types.includes('REMOTE'));
+      }
     } catch (err) {
       console.error('Failed to load settings:', err);
     }

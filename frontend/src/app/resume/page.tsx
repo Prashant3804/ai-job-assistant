@@ -46,97 +46,33 @@ export default function ResumeIntelligencePage() {
 
   // Structured Editable State
   const [personal, setPersonal] = useState<PersonalDetails>({
-    name: 'Alex Mercer',
-    email: 'alex.mercer@example.com',
-    phone: '(415) 555-0199',
-    location: 'San Francisco, CA (Remote)',
-    linkedin_url: 'https://linkedin.com/in/alexmercer-dev',
-    github_url: 'https://github.com/alexmercer-dev',
-    portfolio_url: 'https://alexmercer.dev',
-    headline: 'Senior Full Stack & AI Systems Engineer',
-    summary:
-      'Senior Engineer with 5+ years of experience designing high-throughput distributed backends, REST/GraphQL APIs, and modern React/Next.js interfaces.',
+    name: '',
+    email: '',
+    phone: '',
+    location: '',
+    linkedin_url: '',
+    github_url: '',
+    portfolio_url: '',
+    headline: '',
+    summary: '',
     is_uncertain: false,
     uncertain_fields: [],
   });
 
   const [skills, setSkills] = useState<CategorizedSkills>({
-    programming_languages: ['Python', 'TypeScript', 'JavaScript', 'Go', 'SQL'],
-    frameworks: ['FastAPI', 'React', 'Next.js', 'TailwindCSS', 'Node.js'],
-    databases: ['PostgreSQL', 'Redis', 'pgvector', 'MongoDB'],
-    cloud: ['AWS', 'Docker', 'GCP', 'Cloudflare'],
-    tools: ['Git', 'GitHub Actions', 'Postman', 'Linux'],
-    soft_skills: ['System Design', 'Cross-Functional Leadership', 'Mentorship'],
+    programming_languages: [],
+    frameworks: [],
+    databases: [],
+    cloud: [],
+    tools: [],
+    soft_skills: [],
   });
 
-  const [education, setEducation] = useState<EducationItem[]>([
-    {
-      id: 'edu-1',
-      degree: 'Bachelor of Science',
-      institution: 'University of California, Berkeley',
-      field_of_study: 'Computer Science',
-      start_date: '2017',
-      end_date: '2021',
-      graduation_year: '2021',
-      cgpa: '3.85',
-      description: "Dean's Honor List, coursework in Distributed Systems, Algorithms, and Database Management.",
-      is_uncertain: false,
-    },
-  ]);
+  const [education, setEducation] = useState<EducationItem[]>([]);
+  const [experience, setExperience] = useState<ExperienceItem[]>([]);
+  const [projects, setProjects] = useState<ProjectItem[]>([]);
+  const [certifications, setCertifications] = useState<CertificationItem[]>([]);
 
-  const [experience, setExperience] = useState<ExperienceItem[]>([
-    {
-      id: 'exp-1',
-      company: 'Apex Cloud Systems',
-      role: 'Senior Backend Engineer',
-      start_date: '2023-01',
-      end_date: 'Present',
-      is_current: true,
-      responsibilities: [
-        'Architected asynchronous microservices with FastAPI and PostgreSQL pgvector, cutting p99 latency by 42%.',
-        'Engineered vector retrieval pipelines for search across 10M+ documents with sub-50ms latency.',
-        'Mentored 6 junior engineers and established automated CI/CD workflows.',
-      ],
-      technologies: ['Python', 'FastAPI', 'PostgreSQL', 'Docker', 'Redis'],
-      is_uncertain: false,
-    },
-    {
-      id: 'exp-2',
-      company: 'Nexus Tech Labs',
-      role: 'Full Stack Software Engineer',
-      start_date: '2021-03',
-      end_date: '2022-12',
-      is_current: false,
-      responsibilities: [
-        'Developed high-performance Next.js web application used by 120k monthly active users.',
-        'Optimized relational database queries reducing database CPU load by 35%.',
-      ],
-      technologies: ['React', 'TypeScript', 'Node.js', 'PostgreSQL', 'TailwindCSS'],
-      is_uncertain: false,
-    },
-  ]);
-
-  const [projects, setProjects] = useState<ProjectItem[]>([
-    {
-      id: 'proj-1',
-      name: 'AI Vector Search & Ranking Engine',
-      description:
-        'Open-source hybrid keyword + semantic similarity search engine built with FastAPI and PostgreSQL pgvector.',
-      technologies: ['Python', 'FastAPI', 'PostgreSQL', 'pgvector', 'Docker'],
-      links: ['https://github.com/alexmercer-dev/ai-search-engine'],
-      is_uncertain: false,
-    },
-  ]);
-
-  const [certifications, setCertifications] = useState<CertificationItem[]>([
-    {
-      id: 'cert-1',
-      name: 'AWS Certified Solutions Architect',
-      issuer: 'Amazon Web Services',
-      date: '2023',
-      is_uncertain: false,
-    },
-  ]);
 
   // Skill input helper states
   const [newSkillText, setNewSkillText] = useState('');

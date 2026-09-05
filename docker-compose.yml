@@ -36,8 +36,7 @@ services:
       - SECRET_KEY=production-secret-key-job-assistant-2026
     ports:
       - "8000:8000"
-    command: >
-      sh -c "python seed_data.py && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000
 
   # Next.js Frontend Dashboard
   frontend:

@@ -22,12 +22,10 @@ export default function EmailsPage() {
   const [loading, setLoading] = useState(true);
 
   // Playground state
-  const [senderName, setSenderName] = useState('Sarah Jenkins');
-  const [senderEmail, setSenderEmail] = useState('sarah.jenkins@stripe.com');
-  const [subject, setSubject] = useState('Interview Invitation: Next Round Technical Call');
-  const [bodyText, setBodyText] = useState(
-    "Hi Alex, We'd love to schedule your next technical architecture interview this Thursday at 2:00 PM EST. Please let us know if this time works."
-  );
+  const [senderName, setSenderName] = useState('');
+  const [senderEmail, setSenderEmail] = useState('');
+  const [subject, setSubject] = useState('');
+  const [bodyText, setBodyText] = useState('');
   const [classifying, setClassifying] = useState(false);
   const [classifyResult, setClassifyResult] = useState<any>(null);
 

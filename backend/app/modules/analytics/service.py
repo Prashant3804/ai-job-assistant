@@ -68,15 +68,6 @@ class AnalyticsService:
                     skills_counter[s] += 1
 
         top_skills = [{"skill": k, "count": v} for k, v in skills_counter.most_common(8)]
-        if not top_skills:
-            top_skills = [
-                {"skill": "Python", "count": 12},
-                {"skill": "FastAPI", "count": 10},
-                {"skill": "React", "count": 9},
-                {"skill": "PostgreSQL", "count": 8},
-                {"skill": "Docker", "count": 7},
-                {"skill": "TypeScript", "count": 6},
-            ]
 
         # 4. Recent Activities
         events_stmt = (
