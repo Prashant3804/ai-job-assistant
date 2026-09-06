@@ -434,13 +434,20 @@ class AutoApplyDailyRoutineService:
             run_record.failed_count = failed_count
             run_record.skipped_count = skipped_count
             run_record.completed_at = datetime.now(timezone.utc)
+            from app.modules.ai.service import get_ai_service
+            ai_svc = get_ai_service()
+            ai_status = ai_svc.get_provider_status() if hasattr(ai_svc, "get_provider_status") else {}
+
             run_record.run_summary_json = {
                 "source_counts": source_counts,
                 "source_limits": {s: source_limit for s in SEVEN_SOURCES},
                 "total_processed": sum(source_counts.values()),
                 "max_daily_capacity": max_daily_capacity,
                 "applications": application_summaries[:50],
-                "duration_seconds": (run_record.completed_at - run_record.started_at).total_seconds()
+                "duration_seconds": round((run_record.completed_at - run_record.started_at).total_seconds(), 2),
+                "ai_provider": ai_status.get("last_provider_used", "gemini"),
+                "ai_provider_display": ai_status.get("active_display", "Gemini (Primary)"),
+                "fallback_occurred": ai_status.get("last_fallback_occurred", False)
             }
             await self.db.commit()
             return run_record

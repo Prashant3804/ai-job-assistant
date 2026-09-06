@@ -5,24 +5,16 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   LayoutDashboard,
-  BotMessageSquare,
   FileText,
-  Search,
   Briefcase,
-  Zap,
-  Calendar,
   Settings,
   ShieldCheck,
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'AI Chat', href: '/chat', icon: BotMessageSquare },
   { name: 'My Resume', href: '/resume', icon: FileText },
-  { name: 'Find Jobs', href: '/jobs', icon: Search },
   { name: 'Applications', href: '/applications', icon: Briefcase },
-  { name: 'Auto-Apply', href: '/auto-apply', icon: Zap },
-  { name: 'Interviews', href: '/interviews', icon: Calendar },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 

@@ -1,8 +1,6 @@
 'use client';
 
 import React from 'react';
-import { Bell, Sparkles, User, ExternalLink } from 'lucide-react';
-import Link from 'next/link';
 
 interface HeaderProps {
   title: string;
@@ -20,14 +18,6 @@ export function Header({ title, subtitle, actionButton }: HeaderProps) {
 
       <div className="flex items-center gap-4">
         {actionButton}
-
-        <Link
-          href="/chat"
-          className="flex items-center gap-2 bg-gradient-to-r from-sky-500 to-indigo-600 text-white text-xs font-semibold px-3.5 py-2 rounded-lg shadow-sm hover:opacity-95 transition-opacity"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span>Ask Assistant</span>
-        </Link>
 
         {/* User Avatar Pill */}
         <UserPill />

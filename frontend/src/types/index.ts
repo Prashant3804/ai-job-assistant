@@ -776,6 +776,8 @@ export interface RecentAutoApplyApplication {
   company_name: string;
   job_title: string;
   role_title?: string;
+  platform?: string;
+  source?: string;
   status: string;
   match_score?: number | null;
   applied_at?: string;

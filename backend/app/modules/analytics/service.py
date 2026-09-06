@@ -109,13 +109,23 @@ class AnalyticsService:
         routine_svc = AutoApplyDailyRoutineService(self.db)
         routine_info = await routine_svc.get_routine_info(user.id)
 
+        PLATFORM_NAMES = {
+            "naukri": "Naukri",
+            "indeed": "Indeed",
+            "unstop": "Unstop",
+            "linkedin": "LinkedIn Jobs",
+            "internshala": "Internshala",
+            "wellfound": "Wellfound",
+            "career_pages": "Company Careers",
+        }
+
         # Recent applications processed via auto-apply / direct API / external portal
         recent_auto_stmt = (
             select(Application)
-            .options(selectinload(Application.job))
+            .options(selectinload(Application.job).selectinload(Job.job_source))
             .where(Application.user_id == user.id)
             .order_by(Application.created_at.desc())
-            .limit(6)
+            .limit(10)
         )
         recent_auto_res = await self.db.execute(recent_auto_stmt)
         recent_auto_apps = recent_auto_res.scalars().all()
@@ -130,10 +140,21 @@ class AnalyticsService:
             ist_dt = ts.astimezone(kolkata_tz) if ts else None
             formatted_date = ist_dt.strftime("%b %d, %Y • %I:%M %p IST") if ist_dt else "Recent"
 
+            source_slug = a.source
+            if not source_slug and a.job and a.job.job_source:
+                source_slug = a.job.job_source.slug
+            source_name = (
+                PLATFORM_NAMES.get(source_slug or "", None)
+                or (a.job.job_source.name if a.job and a.job.job_source else None)
+                or (source_slug.replace("_", " ").title() if source_slug else "Direct Application")
+            )
+
             recent_auto_list.append({
                 "id": str(a.id),
                 "company_name": a.job.company_name if a.job else "Company",
                 "job_title": a.job.title if a.job else "Job Application",
+                "platform": source_name,
+                "source": source_slug or "career_pages",
                 "status": a.status,
                 "match_score": a.match_score,
                 "applied_at": ts.isoformat() if ts else None,
