@@ -740,6 +740,35 @@ export interface AutoApplyDailyRoutineInfo {
     last_fallback_occurred?: boolean;
     active_display?: string;
   };
+  platforms?: Record<string, PlatformStatItem>;
+}
+
+export interface PlatformStatItem {
+  name: string;
+  slug: string;
+  jobs_discovered: number;
+  matching_jobs: number;
+  applied: number;
+  manual_required: number;
+  failed: number;
+  daily_limit: number;
+  applied_today: number;
+  current_daily_count: number;
+  progress_pct: number;
+  last_activity_utc?: string | null;
+  last_activity_ist: string;
+  status: string;
+  automation_type: string;
+}
+
+export interface PlatformsDashboardResponse {
+  date: string;
+  schedule_time: string;
+  total_applied_today: number;
+  total_daily_limit: number;
+  total_manual_required_today: number;
+  total_failed_today: number;
+  platforms: Record<string, PlatformStatItem>;
 }
 
 export interface RecentAutoApplyApplication {

@@ -57,6 +57,7 @@ export const api = {
 
   // Dashboard & Analytics
   getDashboard: () => fetchApi<any>('/analytics/dashboard'),
+  getPlatformStats: () => fetchApi<any>('/auto-apply/platforms/stats'),
 
   // Jobs & Discovery Engine (Phase 3)
   getJobs: (params?: Record<string, string>) => {
@@ -89,7 +90,19 @@ export const api = {
   toggleBookmark: (jobId: string) => fetchApi<any>(`/matching/jobs/${jobId}/bookmark`, { method: 'POST' }),
 
   // Applications & Automated Application Engine (Phase 6)
-  getApplications: (status?: string) => fetchApi<any>(`/applications${status ? `?status=${status}` : ''}`),
+  getApplications: (params?: string | { status?: string; source?: string; time_range?: string; limit?: number; offset?: number }) => {
+    if (typeof params === 'string') {
+      return fetchApi<any>(`/applications?status=${params}`);
+    }
+    const query = new URLSearchParams();
+    if (params?.status) query.append('status', params.status);
+    if (params?.source) query.append('source', params.source);
+    if (params?.time_range) query.append('time_range', params.time_range);
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.offset) query.append('offset', String(params.offset));
+    const qs = query.toString();
+    return fetchApi<any>(`/applications${qs ? `?${qs}` : ''}`);
+  },
   getApplicationDetails: (id: string) => fetchApi<any>(`/applications/${id}`),
   getApplicationStatistics: () => fetchApi<any>('/applications/statistics'),
   getApplicationEvents: (id: string) => fetchApi<any>(`/applications/${id}/events`),

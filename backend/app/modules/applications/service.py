@@ -31,7 +31,9 @@ from app.modules.applications.schemas import (
     ApplicationPolicyRead,
     AutoApplyStatusRead,
     ApplicationStatisticsRead,
-    ProcessQueueResponse
+    ProcessQueueResponse,
+    PlatformStatItem,
+    PlatformsDashboardResponse
 )
 from app.modules.applications.policy import ApplicationPolicyEngine
 from app.modules.applications.duplicate import DuplicateDetector
@@ -297,7 +299,23 @@ class ApplicationService:
         await self.db.commit()
         return await self.get_application_by_id(app.id)
 
-    async def list_applications(self, user_id: uuid.UUID, status: Optional[str] = None) -> List[Application]:
+    async def list_applications(
+        self,
+        user_id: uuid.UUID,
+        status: Optional[str] = None,
+        source: Optional[str] = None,
+        time_range: Optional[str] = None,
+        limit: int = 50,
+        offset: int = 0
+    ) -> List[Application]:
+        from zoneinfo import ZoneInfo
+        from datetime import timedelta
+        kolkata_tz = ZoneInfo("Asia/Kolkata")
+        now_utc = datetime.now(timezone.utc)
+        now_kolkata = now_utc.astimezone(kolkata_tz)
+        start_of_today_kolkata = now_kolkata.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_of_today_utc = start_of_today_kolkata.astimezone(timezone.utc)
+
         stmt = (
             select(Application)
             .options(
@@ -311,7 +329,29 @@ class ApplicationService:
         if status:
             stmt = stmt.where(Application.status == status)
 
-        stmt = stmt.order_by(Application.created_at.desc())
+        if source:
+            source_lower = source.lower()
+            if source_lower in ["career_pages", "company_careers", "ats"]:
+                stmt = stmt.where(Application.source.in_(["career_pages", "greenhouse", "lever", "authorized_api", "direct"]))
+            else:
+                stmt = stmt.where(Application.source == source_lower)
+
+        if time_range:
+            tr = time_range.lower()
+            ts_col = func.coalesce(Application.applied_date, Application.created_at)
+            if tr == "today":
+                stmt = stmt.where(ts_col >= start_of_today_utc)
+            elif tr == "yesterday":
+                start_yesterday_utc = (start_of_today_kolkata - timedelta(days=1)).astimezone(timezone.utc)
+                stmt = stmt.where(and_(ts_col >= start_yesterday_utc, ts_col < start_of_today_utc))
+            elif tr in ["7d", "last_7_days"]:
+                seven_d_utc = now_utc - timedelta(days=7)
+                stmt = stmt.where(ts_col >= seven_d_utc)
+            elif tr in ["30d", "last_30_days"]:
+                thirty_d_utc = now_utc - timedelta(days=30)
+                stmt = stmt.where(ts_col >= thirty_d_utc)
+
+        stmt = stmt.order_by(Application.created_at.desc()).limit(limit).offset(offset)
         res = await self.db.execute(stmt)
         return list(res.scalars().all())
 
@@ -416,4 +456,211 @@ class ApplicationService:
             retried_count=retried,
             skipped_count=skipped,
             details=details
+        )
+
+    async def get_platform_statistics(self, user_id: uuid.UUID) -> PlatformsDashboardResponse:
+        from zoneinfo import ZoneInfo
+        from app.database.models.application import AutoApplyDailyRun
+        from app.modules.jobs.connectors.adapters import get_connector_by_slug
+
+        kolkata_tz = ZoneInfo("Asia/Kolkata")
+        now_utc = datetime.now(timezone.utc)
+        now_kolkata = now_utc.astimezone(kolkata_tz)
+        start_of_today_kolkata = now_kolkata.replace(hour=0, minute=0, second=0, microsecond=0)
+        start_of_today_utc = start_of_today_kolkata.astimezone(timezone.utc)
+        date_str = now_kolkata.strftime("%Y-%m-%d")
+
+        policy = await self.get_or_create_policy(user_id)
+        is_routine_active = bool(policy and policy.auto_apply_enabled)
+
+        PLATFORM_CONFIG = [
+            {"slug": "naukri", "name": "Naukri", "auto_type": "EXTERNAL_PORTAL"},
+            {"slug": "indeed", "name": "Indeed", "auto_type": "EXTERNAL_PORTAL"},
+            {"slug": "unstop", "name": "Unstop", "auto_type": "DISCOVERY_FEED"},
+            {"slug": "linkedin", "name": "LinkedIn Jobs", "auto_type": "EXTERNAL_PORTAL"},
+            {"slug": "internshala", "name": "Internshala", "auto_type": "DISCOVERY_FEED"},
+            {"slug": "wellfound", "name": "Wellfound", "auto_type": "DISCOVERY_FEED"},
+            {"slug": "career_pages", "name": "Company Careers", "auto_type": "DIRECT_ATS_API"},
+        ]
+
+        # 1. Query all user applications
+        apps_stmt = (
+            select(Application)
+            .options(selectinload(Application.job))
+            .where(Application.user_id == user_id)
+        )
+        apps_res = await self.db.execute(apps_stmt)
+        all_user_apps = list(apps_res.scalars().all())
+
+        # 2. Query active jobs count grouped by source slug
+        jobs_stmt = (
+            select(JobSource.slug, func.count(Job.id))
+            .join(Job, Job.job_source_id == JobSource.id)
+            .where(Job.is_active == True)
+            .group_by(JobSource.slug)
+        )
+        job_counts_res = (await self.db.execute(jobs_stmt)).all()
+        job_counts_by_source = {row[0]: row[1] for row in job_counts_res}
+
+        # 3. Query matches count grouped by source slug for this user
+        matches_stmt = (
+            select(JobSource.slug, func.count(JobMatch.id))
+            .join(Job, JobMatch.job_id == Job.id)
+            .join(JobSource, Job.job_source_id == JobSource.id)
+            .where(and_(JobMatch.user_id == user_id, JobMatch.overall_score >= policy.minimum_match_score))
+            .group_by(JobSource.slug)
+        )
+        match_counts_res = (await self.db.execute(matches_stmt)).all()
+        match_counts_by_source = {row[0]: row[1] for row in match_counts_res}
+
+        # 4. Last completed daily run for fallback timestamps
+        last_run_stmt = (
+            select(AutoApplyDailyRun)
+            .where(AutoApplyDailyRun.user_id == user_id)
+            .order_by(AutoApplyDailyRun.started_at.desc())
+            .limit(1)
+        )
+        last_run = (await self.db.execute(last_run_stmt)).scalar_one_or_none()
+
+        platforms_map: Dict[str, PlatformStatItem] = {}
+        total_applied_today = 0
+        total_manual_today = 0
+        total_failed_today = 0
+
+        def ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
+            if not dt:
+                return None
+            if dt.tzinfo is None:
+                return dt.replace(tzinfo=timezone.utc)
+            return dt.astimezone(timezone.utc)
+
+        for cfg in PLATFORM_CONFIG:
+            slug = cfg["slug"]
+            name = cfg["name"]
+            auto_type = cfg["auto_type"]
+
+            if slug == "career_pages":
+                target_slugs = ["career_pages", "greenhouse", "lever", "authorized_api"]
+            else:
+                target_slugs = [slug]
+
+            # Jobs discovered
+            jobs_discovered = sum(job_counts_by_source.get(s, 0) for s in target_slugs)
+
+            # Matching jobs
+            matching_jobs = sum(match_counts_by_source.get(s, 0) for s in target_slugs)
+
+            # User applications for this platform
+            plat_apps = [
+                a for a in all_user_apps
+                if (a.source in target_slugs or (slug == "career_pages" and a.source in ["career_pages", "greenhouse", "lever", "authorized_api", "direct"]))
+            ]
+
+            # Applied all time & today (Honest: ONLY APPLIED or SUBMITTED)
+            applied_all = [
+                a for a in plat_apps
+                if a.status in [ApplicationStatus.APPLIED.value, ApplicationStatus.SUBMITTED.value]
+            ]
+            applied_today = [
+                a for a in applied_all
+                if (ensure_utc(a.applied_date) and ensure_utc(a.applied_date) >= start_of_today_utc)
+                or (ensure_utc(a.submitted_at) and ensure_utc(a.submitted_at) >= start_of_today_utc)
+            ]
+
+            # Manual required all time & today
+            manual_all = [
+                a for a in plat_apps
+                if a.status == ApplicationStatus.EXTERNAL_APPLICATION_REQUIRED.value
+            ]
+            manual_today = [
+                a for a in manual_all
+                if (ensure_utc(a.created_at) and ensure_utc(a.created_at) >= start_of_today_utc)
+            ]
+
+            # Failed all time & today
+            failed_all = [
+                a for a in plat_apps
+                if a.status == ApplicationStatus.FAILED.value
+            ]
+            failed_today = [
+                a for a in failed_all
+                if (ensure_utc(a.created_at) and ensure_utc(a.created_at) >= start_of_today_utc)
+            ]
+
+            daily_limit = 30
+            applied_count_today = len(applied_today)
+            current_daily_count = applied_count_today
+            progress_pct = min(100.0, round((current_daily_count / daily_limit) * 100.0, 1))
+
+            total_applied_today += applied_count_today
+            total_manual_today += len(manual_today)
+            total_failed_today += len(failed_today)
+
+            # Determine last activity time
+            all_plat_timestamps = []
+            for a in plat_apps:
+                ts = ensure_utc(a.applied_date or a.submitted_at or a.created_at)
+                if ts:
+                    all_plat_timestamps.append(ts)
+
+            last_activity_utc = max(all_plat_timestamps) if all_plat_timestamps else None
+            if not last_activity_utc and last_run and last_run.completed_at:
+                if last_run.run_summary_json and "source_counts" in last_run.run_summary_json:
+                    if last_run.run_summary_json["source_counts"].get(slug, 0) > 0:
+                        last_activity_utc = ensure_utc(last_run.completed_at)
+
+            if last_activity_utc:
+                last_activity_ist = last_activity_utc.astimezone(kolkata_tz).strftime("%d %b %Y, %I:%M %p IST")
+            else:
+                last_activity_ist = "Never run"
+
+            # Determine live status
+            connector = get_connector_by_slug(slug)
+            if not connector and slug == "career_pages":
+                connector = get_connector_by_slug("greenhouse") or get_connector_by_slug("career_pages")
+
+            if not connector:
+                status_str = "NO CONNECTOR"
+            elif not is_routine_active:
+                status_str = "PAUSED"
+            else:
+                try:
+                    conn_status = connector.get_source_status()
+                    if conn_status.get("status") != "HEALTHY":
+                        status_str = "ERROR"
+                    elif conn_status.get("rate_limit_remaining", 100) <= 0:
+                        status_str = "RATE LIMITED"
+                    elif slug == "career_pages":
+                        status_str = "AUTOMATION AVAILABLE"
+                    else:
+                        status_str = "ACTIVE"
+                except Exception:
+                    status_str = "ERROR"
+
+            platforms_map[slug] = PlatformStatItem(
+                name=name,
+                slug=slug,
+                jobs_discovered=jobs_discovered,
+                matching_jobs=matching_jobs,
+                applied=len(applied_all),
+                manual_required=len(manual_all),
+                failed=len(failed_all),
+                daily_limit=daily_limit,
+                applied_today=applied_count_today,
+                current_daily_count=current_daily_count,
+                progress_pct=progress_pct,
+                last_activity_utc=last_activity_utc,
+                last_activity_ist=last_activity_ist,
+                status=status_str,
+                automation_type=auto_type
+            )
+
+        return PlatformsDashboardResponse(
+            date=date_str,
+            schedule_time="10:00 AM IST",
+            total_applied_today=total_applied_today,
+            total_daily_limit=210,
+            total_manual_required_today=total_manual_today,
+            total_failed_today=total_failed_today,
+            platforms=platforms_map
         )

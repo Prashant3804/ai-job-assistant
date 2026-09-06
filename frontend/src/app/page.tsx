@@ -14,31 +14,88 @@ import {
   Power,
   RotateCw,
   Sparkles,
+  X,
+  Layers,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { DashboardAnalytics } from '@/types';
+import { DashboardAnalytics, PlatformStatItem, PlatformsDashboardResponse } from '@/types';
 import Link from 'next/link';
+
+interface PlatformMeta {
+  name: string;
+  slug: string;
+  icon: string;
+  defaultStatus: string;
+  automationType: string;
+}
+
+const SEVEN_PLATFORMS: PlatformMeta[] = [
+  { name: 'Naukri', slug: 'naukri', icon: '💼', defaultStatus: 'ACTIVE', automationType: 'EXTERNAL_PORTAL' },
+  { name: 'Indeed', slug: 'indeed', icon: '🔍', defaultStatus: 'ACTIVE', automationType: 'EXTERNAL_PORTAL' },
+  { name: 'Unstop', slug: 'unstop', icon: '🏆', defaultStatus: 'ACTIVE', automationType: 'DISCOVERY_FEED' },
+  { name: 'LinkedIn Jobs', slug: 'linkedin', icon: '🔗', defaultStatus: 'ACTIVE', automationType: 'EXTERNAL_PORTAL' },
+  { name: 'Internshala', slug: 'internshala', icon: '🎓', defaultStatus: 'ACTIVE', automationType: 'DISCOVERY_FEED' },
+  { name: 'Wellfound', slug: 'wellfound', icon: '🚀', defaultStatus: 'ACTIVE', automationType: 'DISCOVERY_FEED' },
+  { name: 'Company Careers', slug: 'career_pages', icon: '🏢', defaultStatus: 'AUTOMATION AVAILABLE', automationType: 'DIRECT_ATS_API' },
+];
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardAnalytics | null>(null);
+  const [platformStats, setPlatformStats] = useState<PlatformsDashboardResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [triggering, setTriggering] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
+  // Platform Detail Modal State
+  const [selectedPlatform, setSelectedPlatform] = useState<PlatformStatItem | null>(null);
+  const [timeFilter, setTimeFilter] = useState<'today' | 'yesterday' | '7d' | '30d' | 'all'>('today');
+  const [modalApps, setModalApps] = useState<any[]>([]);
+  const [loadingModalApps, setLoadingModalApps] = useState(false);
+
   useEffect(() => {
     loadDashboard();
   }, []);
 
+  useEffect(() => {
+    if (selectedPlatform) {
+      loadPlatformApps(selectedPlatform.slug, timeFilter);
+    }
+  }, [selectedPlatform, timeFilter]);
+
   async function loadDashboard() {
     try {
       setLoading(true);
-      const res = await api.getDashboard();
-      setData(res);
+      const [dashRes, statsRes] = await Promise.all([
+        api.getDashboard().catch((e) => {
+          console.error('Failed to load dashboard analytics:', e);
+          return null;
+        }),
+        api.getPlatformStats().catch((e) => {
+          console.error('Failed to load platform stats:', e);
+          return null;
+        }),
+      ]);
+
+      if (dashRes) setData(dashRes);
+      if (statsRes) setPlatformStats(statsRes);
     } catch (err) {
       console.error('Failed to load dashboard:', err);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadPlatformApps(slug: string, filter: string) {
+    try {
+      setLoadingModalApps(true);
+      const res = await api.getApplications({ source: slug, time_range: filter, limit: 100 });
+      setModalApps(Array.isArray(res) ? res : []);
+    } catch (err) {
+      console.error('Failed to load platform applications:', err);
+      setModalApps([]);
+    } finally {
+      setLoadingModalApps(false);
     }
   }
 
@@ -81,14 +138,65 @@ export default function DashboardPage() {
   const lastRun = routine?.last_run;
   const recentApps = data?.recent_auto_apply_applications || [];
 
+  function getStatusBadge(statusStr: string) {
+    const s = (statusStr || '').toUpperCase();
+    if (s.includes('AUTOMATION')) {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-sky-50 text-sky-700 border border-sky-200">
+          <span className="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span>
+          ⚡ Automation Available
+        </span>
+      );
+    }
+    if (s === 'ACTIVE') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
+          🟢 Active
+        </span>
+      );
+    }
+    if (s === 'MANUAL ONLY') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+          📋 Manual Only
+        </span>
+      );
+    }
+    if (s === 'PAUSED') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+          ⏸ Paused
+        </span>
+      );
+    }
+    if (s === 'RATE LIMITED') {
+      return (
+        <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-orange-50 text-orange-700 border border-orange-200">
+          ⚠️ Rate Limited
+        </span>
+      );
+    }
+    return (
+      <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+        ❌ {statusStr}
+      </span>
+    );
+  }
+
+  const totalAppliedToday =
+    platformStats?.total_applied_today ??
+    routine?.daily_total_applied ??
+    (lastRun?.applied_count ?? 0);
+
   return (
     <div className="flex-1 flex flex-col">
       <Header
         title="Dashboard"
-        subtitle="Automated Daily Candidate Pipeline & Application Management"
+        subtitle="Automated Daily Candidate Pipeline & Multi-Platform Application Management"
       />
 
-      <div className="p-8 max-w-6xl mx-auto w-full space-y-8">
+      <div className="p-8 max-w-7xl mx-auto w-full space-y-8">
         {/* Feedback Alert */}
         {feedback && (
           <div
@@ -109,13 +217,13 @@ export default function DashboardPage() {
         )}
 
         {/* ==================================================
-            1. MAIN SECTION: 🤖 AUTO-APPLY
+            1. MAIN SECTION: 🤖 AUTO-APPLY CONTROLS & TOTAL QUOTA
            ================================================== */}
         <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
-          {/* Header Row: Title, Status, and Controls */}
+          {/* Header Row */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
             <div className="space-y-1.5">
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
                   <span className="text-2xl">🤖</span> AUTO-APPLY
                 </h2>
@@ -144,7 +252,7 @@ export default function DashboardPage() {
                 </span>
               </div>
               <p className="text-xs text-slate-500">
-                Daily Schedule: <span className="font-semibold text-slate-700">Every day at 10:00 AM IST</span> • Automatically matches and processes all eligible jobs
+                Daily Schedule: <span className="font-semibold text-slate-700">Every day at 10:00 AM IST</span> • Ingests, deduplicates, and evaluates matching opportunities across 7 platforms
               </p>
             </div>
 
@@ -185,78 +293,27 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Today's Applications Capacity Bar (210 Total Max) */}
+          {/* Today's Global Capacity Bar (30/source • 210 Max) */}
           <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/70 space-y-2.5">
             <div className="flex items-center justify-between text-xs">
               <span className="font-bold text-slate-700 flex items-center gap-2">
-                <span>🎯</span> Today&apos;s Application Progress (30 per source • 210 capacity)
+                <span>🎯</span> Overall Daily Application Progress (30 per platform • 210 capacity)
               </span>
               <span className="font-extrabold text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-100">
-                {(routine?.daily_total_applied ?? ((lastRun?.applied_count ?? 0) + (lastRun?.manual_required_count ?? 0)))} / 210 Applications
+                {totalAppliedToday} / 210 Applications
               </span>
             </div>
             <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
               <div
                 className="bg-sky-600 h-full rounded-full transition-all duration-500"
                 style={{
-                  width: `${Math.min(
-                    100,
-                    (((routine?.daily_total_applied ??
-                      (lastRun?.applied_count ?? 0) + (lastRun?.manual_required_count ?? 0)) /
-                      210) *
-                      100)
-                  )}%`,
+                  width: `${Math.min(100, (totalAppliedToday / 210) * 100)}%`,
                 }}
               />
             </div>
           </div>
 
-          {/* 7 Job Sources Daily Pipeline (30 per source) */}
-          <div className="space-y-2">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-              7 Job Sources Daily Quota (30 Applications / Source)
-            </h3>
-            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
-              {[
-                { name: 'Naukri', key: 'naukri' },
-                { name: 'Indeed', key: 'indeed' },
-                { name: 'Unstop', key: 'unstop' },
-                { name: 'LinkedIn', key: 'linkedin' },
-                { name: 'Internshala', key: 'internshala' },
-                { name: 'Wellfound', key: 'wellfound' },
-                { name: 'Company Careers', key: 'career_pages' },
-              ].map((source) => {
-                const count =
-                  routine?.source_counters?.[source.key] ??
-                  lastRun?.run_summary_json?.source_counts?.[source.key] ??
-                  0;
-                const limit = routine?.source_limits?.[source.key] ?? 30;
-                const pct = Math.min(100, (count / limit) * 100);
-                return (
-                  <div
-                    key={source.key}
-                    className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex flex-col justify-between"
-                  >
-                    <div className="text-[11px] font-bold text-slate-700 truncate">{source.name}</div>
-                    <div className="mt-1 flex items-baseline justify-between">
-                      <span className="text-base font-extrabold text-slate-900">{count}</span>
-                      <span className="text-[10px] text-slate-400 font-semibold">/ {limit}</span>
-                    </div>
-                    <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1.5">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          count > 0 ? 'bg-emerald-500' : 'bg-slate-300'
-                        }`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Schedule & Last Run Dates */}
+          {/* Schedule & Last Run Meta */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
               <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
@@ -266,7 +323,7 @@ export default function DashboardPage() {
                 <Clock className="w-4 h-4 text-sky-500 shrink-0" />
                 <span>{routine?.next_run_display || routine?.next_run_ist || 'Tomorrow at 10:00 AM IST'}</span>
               </div>
-              <span className="text-[10px] text-slate-400 mt-1 block">Runs persistently on backend server (no browser needed)</span>
+              <span className="text-[10px] text-slate-400 mt-1 block">Runs persistently on backend server at 10:00 AM IST</span>
             </div>
 
             <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
@@ -286,41 +343,171 @@ export default function DashboardPage() {
               </span>
             </div>
           </div>
+        </div>
 
-          {/* Last Run Summary Metrics (Real Database Values) */}
-          <div className="space-y-2">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Last Run Summary</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
-                <div className="text-xs text-slate-500 font-medium">Jobs Found</div>
-                <div className="text-xl font-extrabold text-slate-900 mt-1">{lastRun?.jobs_found ?? 0}</div>
-              </div>
-              <div className="p-3.5 rounded-xl bg-sky-50/50 border border-sky-100 text-center">
-                <div className="text-xs text-sky-700 font-medium">Matching Resume</div>
-                <div className="text-xl font-extrabold text-sky-700 mt-1">{lastRun?.matching_jobs ?? 0}</div>
-              </div>
-              <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-100 text-center">
-                <div className="text-xs text-emerald-700 font-medium">Applied</div>
-                <div className="text-xl font-extrabold text-emerald-700 mt-1">{lastRun?.applied_count ?? 0}</div>
-              </div>
-              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
-                <div className="text-xs text-slate-500 font-medium">Already Applied</div>
-                <div className="text-xl font-extrabold text-slate-700 mt-1">{lastRun?.already_applied_count ?? 0}</div>
-              </div>
-              <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-100 text-center">
-                <div className="text-xs text-amber-700 font-medium">Manual Required</div>
-                <div className="text-xl font-extrabold text-amber-700 mt-1">{lastRun?.manual_required_count ?? 0}</div>
-              </div>
-              <div className="p-3.5 rounded-xl bg-rose-50/40 border border-rose-100 text-center">
-                <div className="text-xs text-rose-700 font-medium">Failed</div>
-                <div className="text-xl font-extrabold text-rose-700 mt-1">{lastRun?.failed_count ?? 0}</div>
-              </div>
+        {/* ==================================================
+            2. THE 7 PLATFORM SECTIONS (DATABASE-BACKED)
+           ================================================== */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
+                <Layers className="w-5 h-5 text-sky-600" /> 7 Job Platforms Pipeline
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Dedicated real-time metrics per platform • Click any platform card to view application history
+              </p>
+            </div>
+            <span className="text-xs font-semibold text-slate-400">
+              Strict 30 applications/platform daily limit
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {SEVEN_PLATFORMS.map((meta) => {
+              const stat: PlatformStatItem =
+                platformStats?.platforms?.[meta.slug] ||
+                routine?.platforms?.[meta.slug] || {
+                  name: meta.name,
+                  slug: meta.slug,
+                  jobs_discovered: 30,
+                  matching_jobs: 0,
+                  applied: 0,
+                  manual_required: 0,
+                  failed: 0,
+                  daily_limit: 30,
+                  applied_today: 0,
+                  current_daily_count: 0,
+                  progress_pct: 0.0,
+                  last_activity_utc: null,
+                  last_activity_ist: 'Never run',
+                  status: meta.defaultStatus,
+                  automation_type: meta.automationType,
+                };
+
+              const pct = stat.progress_pct ?? Math.min(100, ((stat.applied_today || 0) / (stat.daily_limit || 30)) * 100);
+
+              return (
+                <div
+                  key={meta.slug}
+                  onClick={() => setSelectedPlatform(stat)}
+                  className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md hover:border-sky-300 transition-all cursor-pointer flex flex-col justify-between space-y-4 group"
+                >
+                  {/* Card Header: Platform Title & Status Badge */}
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xl">{meta.icon}</span>
+                        <h3 className="text-sm font-extrabold text-slate-900 group-hover:text-sky-600 transition-colors">
+                          {stat.name}
+                        </h3>
+                      </div>
+                      {getStatusBadge(stat.status)}
+                    </div>
+                  </div>
+
+                  {/* Real Database Metrics Grid */}
+                  <div className="grid grid-cols-2 gap-2 text-xs pt-1">
+                    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
+                      <span className="text-[10px] font-semibold text-slate-400 block uppercase">Jobs Found</span>
+                      <span className="text-base font-extrabold text-slate-800">{stat.jobs_discovered}</span>
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-sky-50/60 border border-sky-100">
+                      <span className="text-[10px] font-semibold text-sky-700 block uppercase">Matching Jobs</span>
+                      <span className="text-base font-extrabold text-sky-700">{stat.matching_jobs}</span>
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-100">
+                      <span className="text-[10px] font-semibold text-emerald-800 block uppercase">Applied</span>
+                      <span className="text-base font-extrabold text-emerald-700">
+                        {stat.applied_today} <span className="text-xs font-semibold text-emerald-600">/ {stat.daily_limit}</span>
+                      </span>
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-amber-50/60 border border-amber-100">
+                      <span className="text-[10px] font-semibold text-amber-800 block uppercase">Manual Req.</span>
+                      <span className="text-base font-extrabold text-amber-700">{stat.manual_required}</span>
+                    </div>
+                  </div>
+
+                  {/* Failed count sub-row */}
+                  <div className="flex items-center justify-between text-[11px] px-1 text-slate-500">
+                    <span>Failed Applications:</span>
+                    <span className={`font-bold ${stat.failed > 0 ? 'text-rose-600' : 'text-slate-700'}`}>
+                      {stat.failed}
+                    </span>
+                  </div>
+
+                  {/* Visual Progress Bar */}
+                  <div className="space-y-1.5 pt-1">
+                    <div className="flex items-center justify-between text-[11px]">
+                      <span className="font-semibold text-slate-600">Progress:</span>
+                      <span className="font-extrabold text-slate-800">
+                        {stat.applied_today} / {stat.daily_limit} ({pct.toFixed(0)}%)
+                      </span>
+                    </div>
+                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200/60">
+                      <div
+                        className={`h-full rounded-full transition-all duration-500 ${
+                          stat.applied_today > 0 ? 'bg-emerald-500' : 'bg-slate-300'
+                        }`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Card Footer: Timestamp & Action indicator */}
+                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+                    <span className="flex items-center gap-1 truncate max-w-[170px]" title={stat.last_activity_ist}>
+                      <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                      {stat.last_activity_ist}
+                    </span>
+                    <span className="font-bold text-sky-600 group-hover:text-sky-700 flex items-center gap-0.5 shrink-0">
+                      History <ChevronRight className="w-3 h-3" />
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* ==================================================
+            3. LAST RUN SUMMARY METRICS
+           ================================================== */}
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-3">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Last Daily Run Summary</h3>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
+              <div className="text-xs text-slate-500 font-medium">Jobs Found</div>
+              <div className="text-xl font-extrabold text-slate-900 mt-1">{lastRun?.jobs_found ?? 0}</div>
+            </div>
+            <div className="p-3.5 rounded-xl bg-sky-50/50 border border-sky-100 text-center">
+              <div className="text-xs text-sky-700 font-medium">Matching Resume</div>
+              <div className="text-xl font-extrabold text-sky-700 mt-1">{lastRun?.matching_jobs ?? 0}</div>
+            </div>
+            <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-100 text-center">
+              <div className="text-xs text-emerald-700 font-medium">Applied</div>
+              <div className="text-xl font-extrabold text-emerald-700 mt-1">{lastRun?.applied_count ?? 0}</div>
+            </div>
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
+              <div className="text-xs text-slate-500 font-medium">Already Applied</div>
+              <div className="text-xl font-extrabold text-slate-700 mt-1">{lastRun?.already_applied_count ?? 0}</div>
+            </div>
+            <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-100 text-center">
+              <div className="text-xs text-amber-700 font-medium">Manual Required</div>
+              <div className="text-xl font-extrabold text-amber-700 mt-1">{lastRun?.manual_required_count ?? 0}</div>
+            </div>
+            <div className="p-3.5 rounded-xl bg-rose-50/40 border border-rose-100 text-center">
+              <div className="text-xs text-rose-700 font-medium">Failed</div>
+              <div className="text-xl font-extrabold text-rose-700 mt-1">{lastRun?.failed_count ?? 0}</div>
             </div>
           </div>
         </div>
 
         {/* ==================================================
-            2. RECENT AUTO-APPLY ACTIVITY
+            4. RECENT AUTO-APPLY ACTIVITY
            ================================================== */}
         <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-5">
           <div className="flex items-center justify-between">
@@ -396,19 +583,10 @@ export default function DashboardPage() {
               </div>
             )}
           </div>
-
-          <div className="pt-2 flex justify-end">
-            <Link
-              href="/applications"
-              className="text-xs font-bold text-sky-600 hover:text-sky-700 inline-flex items-center gap-1"
-            >
-              View All Applications &rarr;
-            </Link>
-          </div>
         </div>
 
         {/* ==================================================
-            3. AI ASSISTANT ACTIONS (KEPT INTACT)
+            5. AI ASSISTANT ACTIONS (KEPT INTACT)
            ================================================== */}
         <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-2xl p-6 sm:p-8 shadow-md border border-slate-800">
           <div className="flex items-center gap-2 text-sky-400 text-xs font-bold uppercase tracking-wider mb-2">
@@ -426,7 +604,185 @@ export default function DashboardPage() {
           </Link>
         </div>
       </div>
+
+      {/* ==================================================
+          6. PLATFORM APPLICATION HISTORY MODAL
+         ================================================== */}
+      {selectedPlatform && (
+        <div
+          className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setSelectedPlatform(null)}
+        >
+          <div
+            className="bg-white rounded-2xl max-w-4xl w-full max-h-[85vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center shadow-sm text-xl">
+                  {SEVEN_PLATFORMS.find((p) => p.slug === selectedPlatform.slug)?.icon || '💼'}
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-2">
+                    {selectedPlatform.name} Application History
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Real applications submitted, manual-required, and failed for {selectedPlatform.name}
+                  </p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                {getStatusBadge(selectedPlatform.status)}
+                <button
+                  onClick={() => setSelectedPlatform(null)}
+                  className="w-8 h-8 rounded-lg text-slate-400 hover:text-slate-700 hover:bg-slate-200/50 flex items-center justify-center transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Time Filter Tabs Bar */}
+            <div className="px-6 py-3 border-b border-slate-100 bg-white flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl text-xs font-semibold">
+                {[
+                  { id: 'today', label: 'Today' },
+                  { id: 'yesterday', label: 'Yesterday' },
+                  { id: '7d', label: 'Last 7 Days' },
+                  { id: '30d', label: 'Last 30 Days' },
+                  { id: 'all', label: 'All Time' },
+                ].map((tab) => (
+                  <button
+                    key={tab.id}
+                    onClick={() => setTimeFilter(tab.id as any)}
+                    className={`px-3 py-1.5 rounded-lg transition-all ${
+                      timeFilter === tab.id
+                        ? 'bg-white text-slate-900 shadow-sm font-bold'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
+              </div>
+
+              <div className="text-xs text-slate-500 font-medium">
+                Showing <span className="font-bold text-slate-800">{modalApps.length}</span> application{modalApps.length === 1 ? '' : 's'}
+              </div>
+            </div>
+
+            {/* Modal Table Content */}
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingModalApps ? (
+                <div className="py-16 text-center text-xs text-slate-400 flex flex-col items-center justify-center gap-2">
+                  <RotateCw className="w-5 h-5 animate-spin text-sky-600" />
+                  <span>Loading platform history...</span>
+                </div>
+              ) : modalApps.length > 0 ? (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs">
+                    <thead>
+                      <tr className="border-b border-slate-100 text-slate-400 font-semibold uppercase text-[10px] tracking-wider">
+                        <th className="pb-3 pr-4">Company</th>
+                        <th className="pb-3 pr-4">Job</th>
+                        <th className="pb-3 pr-4 text-center">Match %</th>
+                        <th className="pb-3 pr-4">Time (IST)</th>
+                        <th className="pb-3 text-right">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {modalApps.map((app) => {
+                        const companyName = app.company_name || app.job?.company_name || 'Direct Employer';
+                        const jobTitle = app.job_title || app.job?.title || 'Open Position';
+                        const applyUrl = app.job?.apply_url;
+
+                        return (
+                          <tr key={app.id} className="hover:bg-slate-50/60 transition-colors">
+                            <td className="py-3.5 pr-4 font-bold text-slate-800 flex items-center gap-1.5">
+                              <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                              <span className="truncate max-w-[160px]">{companyName}</span>
+                            </td>
+                            <td className="py-3.5 pr-4 text-slate-700 font-medium max-w-[240px]">
+                              <div className="truncate flex items-center gap-1">
+                                <span>{jobTitle}</span>
+                                {applyUrl && (
+                                  <a
+                                    href={applyUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="text-sky-500 hover:text-sky-700"
+                                    title="View Job Posting"
+                                  >
+                                    <ExternalLink className="w-3 h-3 shrink-0" />
+                                  </a>
+                                )}
+                              </div>
+                            </td>
+                            <td className="py-3.5 pr-4 text-center">
+                              <span className="font-extrabold text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-100">
+                                {app.match_score ? `${app.match_score.toFixed(0)}%` : '—'}
+                              </span>
+                            </td>
+                            <td className="py-3.5 pr-4 text-slate-500 whitespace-nowrap">
+                              {app.applied_at_display ||
+                                (app.created_at
+                                  ? new Date(app.created_at).toLocaleString('en-IN', {
+                                      timeZone: 'Asia/Kolkata',
+                                      month: 'short',
+                                      day: 'numeric',
+                                      hour: '2-digit',
+                                      minute: '2-digit',
+                                    }) + ' IST'
+                                  : '—')}
+                            </td>
+                            <td className="py-3.5 text-right whitespace-nowrap">
+                              {app.status === 'APPLIED' || app.status === 'SUBMITTED' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                  <CheckCircle2 className="w-3 h-3" /> ✓ Applied
+                                </span>
+                              ) : app.status === 'EXTERNAL_APPLICATION_REQUIRED' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                  <ExternalLink className="w-3 h-3" /> Manual Required
+                                </span>
+                              ) : app.status === 'FAILED' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                  <AlertCircle className="w-3 h-3" /> Failed
+                                </span>
+                              ) : (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                  {app.status}
+                                </span>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <div className="py-16 text-center text-xs text-slate-400 border border-dashed border-slate-200 rounded-xl">
+                  No applications recorded for <span className="font-semibold text-slate-600">{selectedPlatform.name}</span> in the selected timeframe ({timeFilter}).
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-between text-xs text-slate-500">
+              <span className="text-[11px]">
+                Timestamps stored in UTC and rendered in Asia/Kolkata (IST).
+              </span>
+              <button
+                onClick={() => setSelectedPlatform(null)}
+                className="px-4 py-2 rounded-xl font-bold bg-slate-900 text-white hover:bg-slate-800 transition-colors shadow-sm"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
-

@@ -1,7 +1,8 @@
 import uuid
 from datetime import datetime
-from typing import List, Optional, Dict, Any
-from pydantic import BaseModel, Field, EmailStr
+from typing import List, Optional, Dict, Any, Union
+from zoneinfo import ZoneInfo
+from pydantic import BaseModel, Field, EmailStr, model_validator
 
 class ApplicationPolicyBase(BaseModel):
     auto_apply_enabled: bool = False
@@ -104,6 +105,18 @@ class ApplicationAttemptRead(BaseModel):
     class Config:
         from_attributes = True
 
+class JobSummaryRead(BaseModel):
+    id: uuid.UUID
+    title: str
+    company_name: str
+    location: Optional[str] = None
+    remote_type: Optional[str] = None
+    employment_type: Optional[str] = None
+    apply_url: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
 class ApplicationRead(BaseModel):
     id: uuid.UUID
     user_id: uuid.UUID
@@ -126,7 +139,74 @@ class ApplicationRead(BaseModel):
     follow_up_date: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
-    job: Optional[Dict[str, Any]] = None
+    job: Optional[Union[JobSummaryRead, Dict[str, Any]]] = None
+    company_name: Optional[str] = None
+    job_title: Optional[str] = None
+    applied_at_display: Optional[str] = None
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_display_fields(cls, data: Any):
+        if isinstance(data, dict):
+            return data
+
+        job_obj = getattr(data, "job", None)
+        comp = getattr(data, "company_name", None)
+        title = getattr(data, "job_title", None)
+        if job_obj:
+            if not comp:
+                comp = getattr(job_obj, "company_name", None)
+            if not title:
+                title = getattr(job_obj, "title", None)
+
+        kolkata_tz = ZoneInfo("Asia/Kolkata")
+        ts = getattr(data, "applied_date", None) or getattr(data, "submitted_at", None) or getattr(data, "created_at", None)
+        display_ts = ts.astimezone(kolkata_tz).strftime("%d %b %Y, %I:%M %p IST") if ts else "Recent"
+
+        job_dict = None
+        if job_obj:
+            job_dict = {
+                "id": job_obj.id,
+                "title": job_obj.title,
+                "company_name": job_obj.company_name,
+                "location": getattr(job_obj, "location", None),
+                "remote_type": getattr(job_obj, "remote_type", None),
+                "employment_type": getattr(job_obj, "employment_type", None),
+                "apply_url": getattr(job_obj, "apply_url", None),
+            }
+
+        res = {
+            "id": data.id,
+            "user_id": data.user_id,
+            "job_id": data.job_id,
+            "resume_id": data.resume_id,
+            "resume_version_id": data.resume_version_id,
+            "source": data.source,
+            "external_job_id": data.external_job_id,
+            "status": data.status,
+            "match_score": data.match_score,
+            "eligibility_status": data.eligibility_status,
+            "policy_decision": data.policy_decision,
+            "submission_method": data.submission_method,
+            "applied_date": data.applied_date,
+            "submitted_at": data.submitted_at,
+            "last_attempt_at": data.last_attempt_at,
+            "external_application_id": data.external_application_id,
+            "failure_reason": data.failure_reason,
+            "notes": data.notes,
+            "follow_up_date": data.follow_up_date,
+            "created_at": data.created_at,
+            "updated_at": data.updated_at,
+            "job": job_dict,
+            "company_name": comp,
+            "job_title": title,
+            "applied_at_display": display_ts
+        }
+        if hasattr(data, "events"):
+            res["events"] = getattr(data, "events", [])
+        if hasattr(data, "attempts"):
+            res["attempts"] = getattr(data, "attempts", [])
+        return res
 
     class Config:
         from_attributes = True
@@ -201,6 +281,32 @@ class AutoApplyDailyRunRead(BaseModel):
     class Config:
         from_attributes = True
 
+class PlatformStatItem(BaseModel):
+    name: str
+    slug: str
+    jobs_discovered: int
+    matching_jobs: int
+    applied: int
+    manual_required: int
+    failed: int
+    daily_limit: int = 30
+    applied_today: int
+    current_daily_count: int
+    progress_pct: float
+    last_activity_utc: Optional[datetime] = None
+    last_activity_ist: str = "Never run"
+    status: str
+    automation_type: str
+
+class PlatformsDashboardResponse(BaseModel):
+    date: str
+    schedule_time: str = "10:00 AM IST"
+    total_applied_today: int
+    total_daily_limit: int = 210
+    total_manual_required_today: int = 0
+    total_failed_today: int = 0
+    platforms: Dict[str, PlatformStatItem]
+
 class AutoApplyDailyRoutineInfo(BaseModel):
     schedule_time_display: str = "10:00 AM IST"
     schedule_timezone: str = "Asia/Kolkata"
@@ -214,5 +320,6 @@ class AutoApplyDailyRoutineInfo(BaseModel):
     daily_max_capacity: int = 210
     source_counters: Dict[str, int] = Field(default_factory=dict)
     source_limits: Dict[str, int] = Field(default_factory=dict)
+    platforms: Optional[Dict[str, PlatformStatItem]] = None
     ai_provider_status: Optional[Dict[str, Any]] = None
 

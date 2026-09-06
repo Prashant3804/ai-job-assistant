@@ -119,15 +119,17 @@ class AutoApplyDailyRoutineService:
         ]
         source_counters = {s: 0 for s in SEVEN_SOURCES}
         source_limits = {s: 30 for s in SEVEN_SOURCES}
-        daily_total = 0
 
-        if last_run and last_run.run_summary_json and "source_counts" in last_run.run_summary_json:
-            for s, cnt in last_run.run_summary_json["source_counts"].items():
-                if s in source_counters:
-                    source_counters[s] = cnt
-            daily_total = sum(source_counters.values())
-        elif last_run:
-            daily_total = (last_run.applied_count or 0) + (last_run.manual_required_count or 0)
+        from app.modules.applications.service import ApplicationService
+        app_svc = ApplicationService(self.db)
+        platforms_resp = await app_svc.get_platform_statistics(user_id)
+        platforms_map = platforms_resp.platforms
+
+        for s in SEVEN_SOURCES:
+            if s in platforms_map:
+                source_counters[s] = platforms_map[s].applied_today
+
+        daily_total = platforms_resp.total_applied_today
 
         from app.modules.ai.service import get_ai_service
         ai_svc = get_ai_service()
@@ -146,6 +148,7 @@ class AutoApplyDailyRoutineService:
             daily_max_capacity=210,
             source_counters=source_counters,
             source_limits=source_limits,
+            platforms=platforms_map,
             ai_provider_status=ai_status
         )
 

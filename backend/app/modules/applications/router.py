@@ -19,7 +19,8 @@ from app.modules.applications.schemas import (
     ProcessQueueRequest,
     ProcessQueueResponse,
     AutoApplyDailyRoutineInfo,
-    AutoApplyDailyRunRead
+    AutoApplyDailyRunRead,
+    PlatformsDashboardResponse
 )
 from app.modules.applications.service import ApplicationService
 from app.modules.applications.daily_routine import AutoApplyDailyRoutineService
@@ -31,11 +32,22 @@ router = APIRouter(tags=["Applications & Auto-Apply"])
 @router.get("/applications", response_model=List[ApplicationRead])
 async def list_applications(
     status: Optional[str] = None,
+    source: Optional[str] = Query(None, description="Filter by platform source (e.g. naukri, indeed, career_pages)"),
+    time_range: Optional[str] = Query(None, description="Filter by time range: today, yesterday, 7d, 30d, all"),
+    limit: int = Query(50, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     service = ApplicationService(db)
-    apps = await service.list_applications(current_user.id, status=status)
+    apps = await service.list_applications(
+        current_user.id,
+        status=status,
+        source=source,
+        time_range=time_range,
+        limit=limit,
+        offset=offset
+    )
     return apps
 
 @router.post("/applications", response_model=ApplicationRead, status_code=status.HTTP_201_CREATED)
@@ -219,4 +231,14 @@ async def trigger_daily_routine_now(
     service = AutoApplyDailyRoutineService(db)
     run_record = await service.execute_daily_routine_for_user(current_user.id)
     return AutoApplyDailyRunRead.model_validate(run_record, from_attributes=True)
+
+# ==================== 7-PLATFORM DASHBOARD METRICS API ====================
+
+@router.get("/auto-apply/platforms/stats", response_model=PlatformsDashboardResponse)
+async def get_platforms_statistics(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    service = ApplicationService(db)
+    return await service.get_platform_statistics(current_user.id)
 
