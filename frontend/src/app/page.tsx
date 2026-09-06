@@ -2,19 +2,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { Header } from '@/components/Header';
-import { MetricCard } from '@/components/MetricCard';
-import { MatchBreakdownModal } from '@/components/MatchBreakdownModal';
 import {
-  Search,
-  Sparkles,
-  Briefcase,
-  Calendar,
-  Award,
   Clock,
   ArrowUpRight,
   Building,
-  MapPin,
-  DollarSign,
   ChevronRight,
   Play,
   CheckCircle2,
@@ -22,15 +13,15 @@ import {
   ExternalLink,
   Power,
   RotateCw,
+  Sparkles,
 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { DashboardAnalytics, JobMatch } from '@/types';
+import { DashboardAnalytics } from '@/types';
 import Link from 'next/link';
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardAnalytics | null>(null);
   const [loading, setLoading] = useState(true);
-  const [selectedMatch, setSelectedMatch] = useState<JobMatch | null>(null);
   const [triggering, setTriggering] = useState(false);
   const [toggling, setToggling] = useState(false);
   const [feedback, setFeedback] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
@@ -76,7 +67,7 @@ export default function DashboardPage() {
       await loadDashboard();
       setFeedback({
         type: 'success',
-        text: `Routine run completed: ${res.applied_count} applied, ${res.manual_required_count} manual required out of ${res.matching_jobs} matching jobs.`,
+        text: `Routine completed: ${res.applied_count} applied, ${res.manual_required_count} manual required out of ${res.matching_jobs} matching opportunities.`,
       });
     } catch (err: any) {
       setFeedback({ type: 'error', text: err?.message || 'Failed to execute daily routine' });
@@ -85,16 +76,8 @@ export default function DashboardPage() {
     }
   }
 
-  const metrics = data?.metrics || {
-    jobs_found: 0,
-    recommended_jobs: 0,
-    applications_total: 0,
-    interviews: 0,
-    offers: 0,
-    pending_applications: 0,
-  };
-
   const routine = data?.auto_apply_routine;
+  const isAutoApplyActive = routine?.auto_apply_enabled ?? routine?.enabled ?? true;
   const lastRun = routine?.last_run;
   const recentApps = data?.recent_auto_apply_applications || [];
 
@@ -102,14 +85,14 @@ export default function DashboardPage() {
     <div className="flex-1 flex flex-col">
       <Header
         title="Dashboard"
-        subtitle="AI Candidate Pipeline & Opportunity Intelligence"
+        subtitle="Automated Daily Candidate Pipeline & Application Management"
       />
 
-      <div className="p-8 space-y-8">
+      <div className="p-8 max-w-6xl mx-auto w-full space-y-8">
         {/* Feedback Alert */}
         {feedback && (
           <div
-            className={`p-4 rounded-xl text-xs font-semibold flex items-center justify-between transition-all ${
+            className={`p-4 rounded-xl text-xs font-semibold flex items-center justify-between transition-all shadow-sm ${
               feedback.type === 'success'
                 ? 'bg-emerald-50 text-emerald-800 border border-emerald-200'
                 : 'bg-rose-50 text-rose-800 border border-rose-200'
@@ -118,106 +101,47 @@ export default function DashboardPage() {
             <span>{feedback.text}</span>
             <button
               onClick={() => setFeedback(null)}
-              className="text-slate-400 hover:text-slate-700 ml-4 font-bold"
+              className="text-slate-400 hover:text-slate-700 ml-4 font-bold text-base leading-none"
             >
               &times;
             </button>
           </div>
         )}
 
-        {/* 6 Required Dashboard Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-          <MetricCard
-            title="Jobs Found"
-            value={metrics.jobs_found}
-            subtitle="Across authorized feeds"
-            icon={Search}
-            color="slate"
-            badge="Live"
-          />
-          <MetricCard
-            title="Recommended Jobs"
-            value={metrics.recommended_jobs}
-            subtitle="Compatibility > 80%"
-            icon={Sparkles}
-            color="blue"
-            badge="High Fit"
-          />
-          <MetricCard
-            title="Applications"
-            value={metrics.applications_total}
-            subtitle="Total in active funnel"
-            icon={Briefcase}
-            color="indigo"
-          />
-          <MetricCard
-            title="Interviews"
-            value={metrics.interviews}
-            subtitle={metrics.interviews > 0 ? `${metrics.interviews} scheduled` : 'No upcoming interviews'}
-            icon={Calendar}
-            color="amber"
-            badge={metrics.interviews > 0 ? 'Active' : undefined}
-          />
-          <MetricCard
-            title="Offers"
-            value={metrics.offers}
-            subtitle={metrics.offers > 0 ? `${metrics.offers} active offers` : 'No active offers'}
-            icon={Award}
-            color="emerald"
-            badge={metrics.offers > 0 ? 'Offer' : undefined}
-          />
-          <MetricCard
-            title="Pending Applications"
-            value={metrics.pending_applications}
-            subtitle="Awaiting initial review"
-            icon={Clock}
-            color="purple"
-          />
-        </div>
-
-        {/* Auto-Apply Daily Routine Section */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-5 border-b border-slate-100">
-            <div className="space-y-1">
+        {/* ==================================================
+            1. MAIN SECTION: 🤖 AUTO-APPLY
+           ================================================== */}
+        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
+          {/* Header Row: Title, Status, and Controls */}
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+            <div className="space-y-1.5">
               <div className="flex items-center gap-3">
-                <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                  <span className="text-xl">🤖</span> Auto-Apply
-                </h3>
-                {(routine?.auto_apply_enabled ?? routine?.enabled) ? (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
+                <h2 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                  <span className="text-2xl">🤖</span> AUTO-APPLY
+                </h2>
+                {isAutoApplyActive ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-800 border border-emerald-200">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    Active
+                    🟢 Auto-Apply Active
                   </span>
                 ) : (
-                  <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
                     <span className="w-2 h-2 rounded-full bg-slate-400"></span>
-                    Disabled
+                    ⚪ Auto-Apply Disabled
                   </span>
                 )}
               </div>
               <p className="text-xs text-slate-500">
-                Daily Schedule: <span className="font-semibold text-slate-700">Every day at 10:00 AM IST</span> • Automatically applies to all matching jobs without artificial limits
+                Daily Schedule: <span className="font-semibold text-slate-700">Every day at 10:00 AM IST</span> • Automatically matches and processes all eligible jobs
               </p>
             </div>
 
-            <div className="flex items-center gap-3">
-              <button
-                onClick={() => handleToggleRoutine(routine?.auto_apply_enabled ?? routine?.enabled ?? true)}
-                disabled={toggling}
-                className={`px-3.5 py-2 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
-                  (routine?.auto_apply_enabled ?? routine?.enabled)
-                    ? 'border-slate-200 text-slate-700 bg-white hover:bg-slate-50'
-                    : 'border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
-                }`}
-              >
-                <Power className="w-3.5 h-3.5" />
-                {toggling ? 'Updating...' : (routine?.auto_apply_enabled ?? routine?.enabled) ? 'Disable Auto-Apply' : 'Enable Auto-Apply'}
-              </button>
-
+            {/* Quick Actions */}
+            <div className="flex flex-wrap items-center gap-3">
               <button
                 onClick={handleTriggerNow}
                 disabled={triggering}
-                className="px-4 py-2 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white transition-all flex items-center gap-2 shadow-sm disabled:opacity-60"
+                className="px-4 py-2.5 rounded-xl text-xs font-bold bg-sky-600 hover:bg-sky-500 active:bg-sky-700 text-white transition-all flex items-center gap-2 shadow-sm disabled:opacity-60"
               >
                 {triggering ? (
                   <RotateCw className="w-3.5 h-3.5 animate-spin" />
@@ -227,243 +151,199 @@ export default function DashboardPage() {
                 {triggering ? 'Running Routine...' : 'Trigger Now'}
               </button>
 
+              <button
+                onClick={() => handleToggleRoutine(isAutoApplyActive)}
+                disabled={toggling}
+                className={`px-4 py-2.5 rounded-xl text-xs font-semibold border transition-all flex items-center gap-1.5 ${
+                  isAutoApplyActive
+                    ? 'border-slate-200 text-slate-700 bg-white hover:bg-slate-50'
+                    : 'border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                }`}
+              >
+                <Power className="w-3.5 h-3.5" />
+                {toggling ? 'Updating...' : isAutoApplyActive ? 'Disable Auto-Apply' : 'Enable Auto-Apply'}
+              </button>
+
               <Link
                 href="/auto-apply"
-                className="px-3.5 py-2 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 hover:border-slate-300 bg-slate-50 transition-all flex items-center gap-1"
+                className="px-3.5 py-2.5 rounded-xl text-xs font-semibold text-slate-600 hover:text-slate-900 border border-slate-200 hover:border-slate-300 bg-slate-50 transition-all flex items-center gap-1"
               >
-                View Auto-Apply Activity <ArrowUpRight className="w-3.5 h-3.5" />
+                Settings <ArrowUpRight className="w-3.5 h-3.5" />
               </Link>
             </div>
           </div>
 
-          {/* Schedule & Run Details Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mt-5">
-            <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-100">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Next Scheduled Run</span>
-              <div className="text-sm font-bold text-slate-800 mt-1 flex items-center gap-2">
+          {/* Schedule & Last Run Dates */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                Next Scheduled Run
+              </span>
+              <div className="text-sm font-bold text-slate-800 mt-1.5 flex items-center gap-2">
                 <Clock className="w-4 h-4 text-sky-500 shrink-0" />
-                <span>{routine?.next_run_display || routine?.next_run_ist || 'Today at 10:00 AM IST'}</span>
+                <span>{routine?.next_run_display || routine?.next_run_ist || 'Tomorrow at 10:00 AM IST'}</span>
               </div>
-              <span className="text-[10px] text-slate-400 mt-1 block">Runs persistently on backend</span>
+              <span className="text-[10px] text-slate-400 mt-1 block">Runs persistently on backend server (no browser needed)</span>
             </div>
 
-            <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-100">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Last Run Status</span>
-              <div className="text-sm font-bold text-slate-800 mt-1 flex items-center gap-2">
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-100">
+              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">
+                Last Run Status
+              </span>
+              <div className="text-sm font-bold text-slate-800 mt-1.5 flex items-center gap-2">
                 <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />
-                <span className="capitalize">{lastRun?.status?.toLowerCase().replace(/_/g, ' ') || 'Ready for 10:00 AM'}</span>
+                <span className="capitalize">
+                  {lastRun ? `${lastRun.status.toLowerCase().replace(/_/g, ' ')}` : 'Ready for 10:00 AM'}
+                </span>
               </div>
               <span className="text-[10px] text-slate-400 mt-1 block">
-                {lastRun?.completed_at ? `Finished: ${new Date(lastRun.completed_at).toLocaleTimeString()}` : 'Next execution queued'}
+                {lastRun?.completed_at
+                  ? `Completed: ${new Date(lastRun.completed_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })} IST`
+                  : 'Awaiting scheduled 10:00 AM trigger'}
               </span>
             </div>
+          </div>
 
-            <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-100">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Last Run Applications</span>
-              <div className="text-sm font-bold text-slate-800 mt-1 flex items-center gap-3">
-                <span className="text-emerald-600 font-extrabold">{lastRun?.applied_count ?? 0} Submitted</span>
-                <span className="text-slate-300">•</span>
-                <span className="text-amber-600 font-semibold">{lastRun?.manual_required_count ?? 0} Manual</span>
+          {/* Last Run Summary Metrics (Real Database Values) */}
+          <div className="space-y-2">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Last Run Summary</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
+                <div className="text-xs text-slate-500 font-medium">Jobs Found</div>
+                <div className="text-xl font-extrabold text-slate-900 mt-1">{lastRun?.jobs_found ?? 0}</div>
               </div>
-              <span className="text-[10px] text-slate-400 mt-1 block">
-                Out of {lastRun?.matching_jobs ?? 0} matching opportunities
-              </span>
-            </div>
-
-            <div className="p-4 rounded-xl bg-slate-50/80 border border-slate-100">
-              <span className="text-[11px] font-semibold text-slate-400 uppercase tracking-wider block">Duplicate Filtered</span>
-              <div className="text-sm font-bold text-slate-800 mt-1">
-                {lastRun?.already_applied_count ?? 0} skipped (already applied)
+              <div className="p-3.5 rounded-xl bg-sky-50/50 border border-sky-100 text-center">
+                <div className="text-xs text-sky-700 font-medium">Matching Resume</div>
+                <div className="text-xl font-extrabold text-sky-700 mt-1">{lastRun?.matching_jobs ?? 0}</div>
               </div>
-              <span className="text-[10px] text-slate-400 mt-1 block">Strict duplicate prevention active</span>
+              <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-100 text-center">
+                <div className="text-xs text-emerald-700 font-medium">Applied</div>
+                <div className="text-xl font-extrabold text-emerald-700 mt-1">{lastRun?.applied_count ?? 0}</div>
+              </div>
+              <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-100 text-center">
+                <div className="text-xs text-slate-500 font-medium">Already Applied</div>
+                <div className="text-xl font-extrabold text-slate-700 mt-1">{lastRun?.already_applied_count ?? 0}</div>
+              </div>
+              <div className="p-3.5 rounded-xl bg-amber-50/60 border border-amber-100 text-center">
+                <div className="text-xs text-amber-700 font-medium">Manual Required</div>
+                <div className="text-xl font-extrabold text-amber-700 mt-1">{lastRun?.manual_required_count ?? 0}</div>
+              </div>
+              <div className="p-3.5 rounded-xl bg-rose-50/40 border border-rose-100 text-center">
+                <div className="text-xs text-rose-700 font-medium">Failed</div>
+                <div className="text-xl font-extrabold text-rose-700 mt-1">{lastRun?.failed_count ?? 0}</div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Two-Column Content Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Left Column (2 cols): Recent Auto-Apply Applications + Top Recommended Jobs */}
-          <div className="lg:col-span-2 space-y-8">
-            {/* Recent Auto-Apply Applications */}
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <Briefcase className="w-4 h-4 text-indigo-500" />
-                    Recent Auto-Apply Applications
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Real applications processed by the automated routine</p>
-                </div>
-                <Link
-                  href="/auto-apply"
-                  className="text-xs font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1"
-                >
-                  View complete history <ChevronRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-
-              <div className="space-y-3">
-                {recentApps.length > 0 ? (
-                  recentApps.map((app) => (
-                    <div
-                      key={app.id}
-                      className="p-4 rounded-xl border border-slate-100 hover:border-slate-300 hover:bg-slate-50/40 transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-slate-900">{app.job_title || app.role_title}</span>
-                          <span className="text-xs text-slate-400">•</span>
-                          <span className="text-xs font-semibold text-slate-700 flex items-center gap-1">
-                            <Building className="w-3.5 h-3.5 text-slate-400" /> {app.company_name}
-                          </span>
-                        </div>
-                        <div className="flex items-center gap-3 text-xs text-slate-500">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-slate-400" /> {app.applied_at_display || app.applied_at_ist || 'Today'}
-                          </span>
-                          <span>•</span>
-                          <span>Method: {app.submission_method}</span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-4 shrink-0">
-                        <div className="text-right">
-                          <div className="text-sm font-black text-sky-600">{(app.match_score ?? 0).toFixed(0)}%</div>
-                          <div className="text-[10px] text-slate-400 uppercase font-medium">Match</div>
-                        </div>
-
-                        {app.status === 'APPLIED' || app.status === 'SUBMITTED' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                            <CheckCircle2 className="w-3.5 h-3.5" /> Applied ✓
-                          </span>
-                        ) : app.status === 'EXTERNAL_APPLICATION_REQUIRED' ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                            <ExternalLink className="w-3.5 h-3.5" /> Manual Required
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                            <AlertCircle className="w-3.5 h-3.5" /> {app.status}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-8 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
-                    No automated applications executed yet. The routine is scheduled for every day at 10:00 AM IST.
-                  </div>
-                )}
-              </div>
+        {/* ==================================================
+            2. RECENT AUTO-APPLY ACTIVITY
+           ================================================== */}
+        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <span className="text-xl">🤖</span> RECENT AUTO-APPLY ACTIVITY
+              </h2>
+              <p className="text-xs text-slate-500 mt-0.5">Real application records stored in PostgreSQL with Asia/Kolkata timestamps</p>
             </div>
-
-            {/* Top Recommended Opportunities */}
-            <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm">
-              <div className="flex items-center justify-between mb-5">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-sky-500" />
-                    Top Recommended Jobs
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">Ranked by explainable multi-factor AI scoring</p>
-                </div>
-                <Link
-                  href="/recommended"
-                  className="text-xs font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1"
-                >
-                  View all ({data?.top_recommendations?.length || 0}) <ChevronRight className="w-3.5 h-3.5" />
-                </Link>
-              </div>
-
-              <div className="space-y-3">
-                {data?.top_recommendations && data.top_recommendations.length > 0 ? (
-                  data.top_recommendations.map((m) => (
-                    <div
-                      key={m.id}
-                      onClick={() => setSelectedMatch(m)}
-                      className="p-4 rounded-xl border border-slate-200/80 hover:border-sky-300 hover:bg-sky-50/30 transition-all cursor-pointer flex flex-col sm:flex-row sm:items-center justify-between gap-4"
-                    >
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm font-bold text-slate-900">{m.job.title}</span>
-                          {m.overall_score >= 85 && (
-                            <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold px-2 py-0.5 rounded-full">
-                              Top Pick
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500">
-                          <span className="flex items-center gap-1 font-medium text-slate-700">
-                            <Building className="w-3.5 h-3.5" /> {m.job.company_name}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <MapPin className="w-3.5 h-3.5" /> {m.job.location || 'Remote'}
-                          </span>
-                          {m.job.salary_min && (
-                            <span className="flex items-center gap-1 text-emerald-600 font-semibold">
-                              <DollarSign className="w-3.5 h-3.5" /> ${(m.job.salary_min / 1000).toFixed(0)}k - ${(m.job.salary_max ? m.job.salary_max / 1000 : 0).toFixed(0)}k
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-4 shrink-0">
-                        <div className="text-right">
-                          <div className="text-lg font-black text-sky-600">{m.overall_score.toFixed(0)}%</div>
-                          <div className="text-[10px] text-slate-400 uppercase font-medium">Match Fit</div>
-                        </div>
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedMatch(m);
-                          }}
-                          className="p-2 rounded-lg bg-slate-100 hover:bg-sky-100 text-slate-600 hover:text-sky-700 transition-colors"
-                        >
-                          <ArrowUpRight className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-10 text-slate-400 text-xs">
-                    {loading ? 'Loading recommendations...' : 'No recommendations found yet'}
-                  </div>
-                )}
-              </div>
-            </div>
+            <Link
+              href="/applications"
+              className="text-xs font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1"
+            >
+              View All Applications <ChevronRight className="w-3.5 h-3.5" />
+            </Link>
           </div>
 
-          {/* Right Column (1 col): Preserved AI Assistant Actions */}
-          <div className="space-y-6">
-            {/* Quick Assistant Actions - KEPT INTACT */}
-            <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-2xl p-6 shadow-md border border-slate-800">
-              <div className="flex items-center gap-2 text-sky-400 text-xs font-bold uppercase tracking-wider mb-2">
-                <Sparkles className="w-4 h-4" /> AI Assistant Actions
+          <div className="space-y-3">
+            {recentApps.length > 0 ? (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-slate-100 text-slate-400 font-semibold uppercase text-[10px] tracking-wider">
+                      <th className="pb-3 pr-4">Company</th>
+                      <th className="pb-3 pr-4">Role</th>
+                      <th className="pb-3 pr-4 text-center">Match Score</th>
+                      <th className="pb-3 pr-4">Time (IST)</th>
+                      <th className="pb-3 text-right">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {recentApps.map((app) => (
+                      <tr key={app.id} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="py-3.5 pr-4 font-bold text-slate-800 flex items-center gap-1.5">
+                          <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{app.company_name}</span>
+                        </td>
+                        <td className="py-3.5 pr-4 text-slate-700 font-medium max-w-[220px] truncate">
+                          {app.job_title || app.role_title}
+                        </td>
+                        <td className="py-3.5 pr-4 text-center">
+                          <span className="font-extrabold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100">
+                            {(app.match_score ?? 0).toFixed(0)}%
+                          </span>
+                        </td>
+                        <td className="py-3.5 pr-4 text-slate-500 flex items-center gap-1">
+                          <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{app.applied_at_display || app.applied_at_ist || 'Recent'}</span>
+                        </td>
+                        <td className="py-3.5 text-right">
+                          {app.status === 'APPLIED' || app.status === 'SUBMITTED' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> ✓ Applied
+                            </span>
+                          ) : app.status === 'EXTERNAL_APPLICATION_REQUIRED' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                              <ExternalLink className="w-3.5 h-3.5" /> Manual
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                              <AlertCircle className="w-3.5 h-3.5" /> {app.status}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
-              <h4 className="text-sm font-semibold">Ready for your Stripe technical interview?</h4>
-              <p className="text-xs text-slate-300 mt-1 leading-relaxed">
-                Generate practice questions tailored to Stripe financial infrastructure and your resume.
-              </p>
-              <Link
-                href="/chat"
-                className="mt-4 inline-flex items-center gap-2 bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold px-4 py-2 rounded-lg transition-colors"
-              >
-                Launch Interview Prep <ChevronRight className="w-3.5 h-3.5" />
-              </Link>
-            </div>
+            ) : (
+              <div className="text-center py-10 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
+                {loading ? 'Loading application activity...' : 'No auto-apply activity recorded yet. The routine runs every day at 10:00 AM IST.'}
+              </div>
+            )}
           </div>
+
+          <div className="pt-2 flex justify-end">
+            <Link
+              href="/applications"
+              className="text-xs font-bold text-sky-600 hover:text-sky-700 inline-flex items-center gap-1"
+            >
+              View All Applications &rarr;
+            </Link>
+          </div>
+        </div>
+
+        {/* ==================================================
+            3. AI ASSISTANT ACTIONS (KEPT INTACT)
+           ================================================== */}
+        <div className="bg-gradient-to-br from-slate-900 to-indigo-950 text-white rounded-2xl p-6 sm:p-8 shadow-md border border-slate-800">
+          <div className="flex items-center gap-2 text-sky-400 text-xs font-bold uppercase tracking-wider mb-2">
+            <Sparkles className="w-4 h-4" /> AI Assistant Actions
+          </div>
+          <h3 className="text-base font-semibold">Ready for your Stripe technical interview?</h3>
+          <p className="text-xs text-slate-300 mt-1 leading-relaxed max-w-2xl">
+            Generate practice questions tailored to Stripe financial infrastructure and your resume.
+          </p>
+          <Link
+            href="/chat"
+            className="mt-4 inline-flex items-center gap-2 bg-sky-500 hover:bg-sky-400 text-slate-950 text-xs font-bold px-4 py-2.5 rounded-lg transition-colors shadow-sm"
+          >
+            Launch Interview Prep <ChevronRight className="w-3.5 h-3.5" />
+          </Link>
         </div>
       </div>
-
-      {/* Explainable Match Modal */}
-      {selectedMatch && (
-        <MatchBreakdownModal
-          match={selectedMatch}
-          onClose={() => setSelectedMatch(null)}
-          onApply={() => {
-            window.location.href = '/applications';
-          }}
-        />
-      )}
     </div>
   );
 }
+
