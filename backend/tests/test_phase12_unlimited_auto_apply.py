@@ -180,13 +180,13 @@ async def test_guardrails_remain_active_in_unlimited_mode():
     assert dec == PolicyDecision.SKIP_LOW_MATCH
 
 @pytest.mark.asyncio
-async def test_service_get_or_create_defaults_to_unlimited(async_session: AsyncSession):
-    """Test ApplicationService creates a policy with unlimited (None) daily limit by default."""
+async def test_service_get_or_create_defaults_to_210_capacity(async_session: AsyncSession):
+    """Test ApplicationService creates a policy with 210 daily limit (30/source across 7 sources)."""
     user = User(
         id=uuid.uuid4(),
-        email="unlimited_test@example.com",
+        email="capacity_test@example.com",
         hashed_password="hashedpassword",
-        full_name="Unlimited User",
+        full_name="Capacity User",
         is_active=True,
         role="CANDIDATE"
     )
@@ -196,15 +196,15 @@ async def test_service_get_or_create_defaults_to_unlimited(async_session: AsyncS
     service = ApplicationService(async_session)
     policy = await service.get_or_create_policy(user.id)
 
-    assert policy.daily_application_limit is None
-    assert policy.per_source_daily_limit is None
+    assert policy.daily_application_limit == 210
+    assert policy.per_source_daily_limit == 30
 
     # Check status endpoint output
     status = await service.get_auto_apply_status(user.id)
-    assert status.daily_application_limit is None
-    assert status.daily_limit_enabled is False
-    assert status.daily_limit_label == "Unlimited"
-    assert status.remaining_daily_quota is None
+    assert status.daily_application_limit == 210
+    assert status.daily_limit_enabled is True
+    assert status.daily_limit_label == "210/day"
+    assert status.remaining_daily_quota == 210
 
 @pytest.mark.asyncio
 async def test_service_policy_update_toggle_unlimited(async_session: AsyncSession):
@@ -242,7 +242,7 @@ async def test_service_policy_update_toggle_unlimited(async_session: AsyncSessio
 
 @pytest.mark.asyncio
 async def test_chatbot_tools_render_unlimited(async_session: AsyncSession):
-    """Verify chatbot tools output 'Unlimited' when daily limit is None."""
+    """Verify chatbot tools output 'Unlimited' when daily limit is set to None."""
     user = User(
         id=uuid.uuid4(),
         email="chat_unlimited@example.com",
@@ -256,6 +256,7 @@ async def test_chatbot_tools_render_unlimited(async_session: AsyncSession):
 
     service = ApplicationService(async_session)
     await service.get_or_create_policy(user.id)
+    await service.update_policy(user.id, ApplicationPolicyUpdate(daily_application_limit=None))
 
     # Test status tool
     status_tool = GetAutoApplyStatusTool()

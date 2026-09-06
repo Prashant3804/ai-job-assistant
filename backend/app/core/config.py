@@ -22,8 +22,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = "sqlite+aiosqlite:///./job_assistant.db"
     ASYNC_DATABASE_URL: Optional[str] = None
 
-    # AI Configuration & OmniRoute Gateway (OpenAI-compatible)
-    DEFAULT_AI_PROVIDER: str = "mock"  # "omniroute" | "mock" | "openai" | "gemini"
+    # AI Configuration: Resilient Dual-Provider Architecture (Gemini Primary + OpenRouter Fallback)
+    DEFAULT_AI_PROVIDER: str = "gemini"  # "gemini" | "openrouter" | "omniroute" | "openai" | "mock"
     OMNIROUTE_BASE_URL: str = "http://localhost:20128/v1"
     OMNIROUTE_API_KEY: Optional[str] = None
     OMNIROUTE_CHAT_MODEL: str = "gpt-4o"
@@ -31,11 +31,20 @@ class Settings(BaseSettings):
     OMNIROUTE_TIMEOUT_SECONDS: int = 60
     OMNIROUTE_MAX_RETRIES: int = 3
 
+    # Primary: Google Gemini
+    GEMINI_API_KEY: Optional[str] = None
+    GEMINI_MODEL: str = "gemini-1.5-flash"
+
+    # Fallback: OpenRouter
+    OPENROUTER_API_KEY: Optional[str] = None
+    OPENROUTER_BASE_URL: str = "https://openrouter.ai/api/v1"
+    OPENROUTER_MODEL: str = "google/gemini-flash-1.5"
+    AI_TIMEOUT_SECONDS: int = 30
+    AI_MAX_RETRIES: int = 2
+
     # Fallback / Direct providers
     OPENAI_API_KEY: Optional[str] = None
     OPENAI_MODEL: str = "gpt-4o"
-    GEMINI_API_KEY: Optional[str] = None
-    GEMINI_MODEL: str = "gemini-1.5-flash"
     ANTHROPIC_API_KEY: Optional[str] = None
     ANTHROPIC_MODEL: str = "claude-3-5-sonnet-20241022"
     LOCAL_LLM_URL: str = "http://localhost:11434/v1"

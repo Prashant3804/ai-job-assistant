@@ -14,89 +14,79 @@ class ResumeService:
         self.ai = ai_service or get_ai_service()
 
     async def extract_structured_resume(self, raw_text: str) -> Dict[str, Any]:
-        """Parses raw resume text into structured candidate profile data."""
-        prompt = (
-            f"Extract comprehensive structured profile details from the following resume text:\n\n{raw_text[:4000]}"
-        )
-        system_prompt = (
-            "You are an expert resume parsing engine. Extract all candidate information into structured JSON with keys: "
-            "headline, summary, location, years_of_experience, skills (array of objects {name, category, proficiency_level, years_experience}), "
-            "experiences (array of objects {company_name, title, location, employment_type, start_date, end_date, is_current, description, bullet_points, technologies}), "
-            "educations (array of objects {institution, degree, field_of_study, start_date, end_date, gpa, description}), "
-            "projects (array of objects {title, description, url, github_url, technologies, start_date, end_date})."
-        )
-        
-        # High quality structured defaults fallback if LLM returns raw text
-        return {
-            "headline": "Senior Full-Stack Software Engineer",
-            "summary": "Full-stack engineer with 5+ years of experience designing high-throughput distributed backends, REST/GraphQL APIs, and modern React/Next.js interfaces. Proficient with FastAPI, PostgreSQL, and LLM integrations.",
-            "location": "San Francisco, CA",
-            "years_of_experience": 5.0,
-            "skills": [
-                {"name": "Python", "category": "TECHNICAL", "proficiency_level": "EXPERT", "years_experience": 5.0},
-                {"name": "FastAPI", "category": "TECHNICAL", "proficiency_level": "EXPERT", "years_experience": 4.0},
-                {"name": "PostgreSQL", "category": "TECHNICAL", "proficiency_level": "ADVANCED", "years_experience": 5.0},
-                {"name": "TypeScript", "category": "TECHNICAL", "proficiency_level": "ADVANCED", "years_experience": 4.0},
-                {"name": "React / Next.js", "category": "TECHNICAL", "proficiency_level": "ADVANCED", "years_experience": 4.0},
-                {"name": "Docker", "category": "TOOL", "proficiency_level": "ADVANCED", "years_experience": 4.0},
-                {"name": "AI/LLM Architecture", "category": "DOMAIN", "proficiency_level": "INTERMEDIATE", "years_experience": 2.0},
-                {"name": "SQLAlchemy", "category": "TECHNICAL", "proficiency_level": "EXPERT", "years_experience": 4.0},
-            ],
-            "experiences": [
-                {
-                    "company_name": "Apex Cloud Systems",
-                    "title": "Senior Software Engineer",
-                    "location": "San Francisco, CA",
-                    "employment_type": "FULL_TIME",
-                    "start_date": "2023-01",
-                    "end_date": "Present",
-                    "is_current": True,
-                    "description": "Led backend architecture for high-throughput enterprise API platform handling 15M+ daily requests.",
-                    "bullet_points": [
-                        "Architected asynchronous microservices with FastAPI and PostgreSQL pgvector, cutting p99 latency by 42%.",
-                        "Built robust OAuth2 and RBAC security systems compliant with SOC2 standards.",
-                        "Mentored 6 junior engineers and established CI/CD automated test pipelines."
-                    ],
-                    "technologies": ["Python", "FastAPI", "PostgreSQL", "Docker", "Redis"]
-                },
-                {
-                    "company_name": "Nexus Tech Labs",
-                    "title": "Full Stack Developer",
-                    "location": "Austin, TX",
-                    "employment_type": "FULL_TIME",
-                    "start_date": "2021-03",
-                    "end_date": "2022-12",
-                    "is_current": False,
-                    "description": "Developed dynamic SaaS web portals and automated data pipelines.",
-                    "bullet_points": [
-                        "Created Next.js dashboard with interactive analytics and server-side rendering.",
-                        "Designed PostgreSQL schema migrations and optimized complex analytical queries."
-                    ],
-                    "technologies": ["React", "TypeScript", "Node.js", "PostgreSQL", "TailwindCSS"]
-                }
-            ],
-            "educations": [
-                {
-                    "institution": "University of California, Berkeley",
-                    "degree": "Bachelor of Science",
-                    "field_of_study": "Computer Science",
-                    "start_date": "2017",
-                    "end_date": "2021",
-                    "gpa": "3.85",
-                    "description": "Dean's Honor List, coursework in Distributed Systems, Algorithms, and Database Management."
-                }
-            ],
-            "projects": [
-                {
-                    "title": "AI Vector Search Engine",
-                    "description": "Open-source hybrid keyword + semantic similarity search engine built with FastAPI and PostgreSQL pgvector.",
-                    "url": "https://github.com/example/ai-search",
-                    "github_url": "https://github.com/example/ai-search",
-                    "technologies": ["Python", "FastAPI", "pgvector", "Docker"],
-                    "start_date": "2024-01",
-                    "end_date": "2024-04"
-                }
+        """Parses raw resume text into structured candidate profile data using dynamic AI extraction."""
+        from app.modules.resume.extraction_service import ResumeExtractionService
+        extractor = ResumeExtractionService(ai_service=self.ai)
+        structured = await extractor.extract_and_structure_resume(raw_text)
+
+        skills_list = []
+        if structured.skills:
+            categories_map = [
+                ("TECHNICAL", structured.skills.programming_languages),
+                ("TECHNICAL", structured.skills.frameworks),
+                ("TECHNICAL", structured.skills.databases),
+                ("TOOL", structured.skills.cloud),
+                ("TOOL", structured.skills.tools),
+                ("SOFT", structured.skills.soft_skills),
             ]
+            for cat, items in categories_map:
+                for item in items:
+                    skills_list.append({
+                        "name": item,
+                        "category": cat,
+                        "proficiency_level": "ADVANCED",
+                        "years_experience": 2.0
+                    })
+
+        experiences_list = []
+        for exp in structured.experience:
+            experiences_list.append({
+                "company_name": exp.company,
+                "title": exp.role,
+                "location": getattr(exp, "location", None),
+                "employment_type": "FULL_TIME",
+                "start_date": exp.start_date,
+                "end_date": exp.end_date,
+                "is_current": exp.is_current,
+                "description": " ".join(exp.responsibilities) if exp.responsibilities else None,
+                "bullet_points": exp.responsibilities,
+                "technologies": exp.technologies
+            })
+
+        educations_list = []
+        for edu in structured.education:
+            educations_list.append({
+                "institution": edu.institution,
+                "degree": edu.degree,
+                "field_of_study": edu.field_of_study,
+                "start_date": edu.start_date,
+                "end_date": edu.graduation_year or edu.end_date,
+                "gpa": edu.cgpa,
+                "description": getattr(edu, "description", None)
+            })
+
+        projects_list = []
+        for proj in structured.projects:
+            projects_list.append({
+                "title": proj.name,
+                "description": proj.description,
+                "url": proj.links[0] if proj.links else None,
+                "github_url": next((l for l in proj.links if "github" in l.lower()), None) if proj.links else None,
+                "technologies": proj.technologies,
+                "start_date": proj.start_date,
+                "end_date": proj.end_date
+            })
+
+        return {
+            "full_name": structured.personal.name if structured.personal else None,
+            "headline": structured.personal.headline or "Software Engineer",
+            "summary": structured.personal.summary or "Professional candidate profile.",
+            "location": structured.personal.location or "Remote",
+            "years_of_experience": structured.total_years_experience or 1.0,
+            "skills": skills_list,
+            "experiences": experiences_list,
+            "educations": educations_list,
+            "projects": projects_list,
         }
 
     async def save_and_apply_resume(self, user_id: uuid.UUID, title: str, raw_text: str, file_format: str = "PDF", file_url: Optional[str] = None) -> Resume:

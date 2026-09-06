@@ -68,8 +68,8 @@ class ApplicationPolicy(Base, TimestampMixin):
     blocked_keywords: Mapped[List[str]] = mapped_column(JSON, default=list, nullable=False)
     allowed_employment_types: Mapped[List[str]] = mapped_column(JSON, default=list, nullable=False)
 
-    daily_application_limit: Mapped[Optional[int]] = mapped_column(Integer, default=None, nullable=True)
-    per_source_daily_limit: Mapped[Optional[int]] = mapped_column(Integer, default=None, nullable=True)
+    daily_application_limit: Mapped[Optional[int]] = mapped_column(Integer, default=210, nullable=True)
+    per_source_daily_limit: Mapped[Optional[int]] = mapped_column(Integer, default=30, nullable=True)
     per_company_limit: Mapped[int] = mapped_column(Integer, default=3, nullable=False)
     duplicate_protection: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     require_complete_profile: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
@@ -79,6 +79,27 @@ class ApplicationPolicy(Base, TimestampMixin):
     allow_remote: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     allow_hybrid: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     allow_onsite: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+
+    def __init__(self, **kw):
+        if "daily_application_limit" not in kw:
+            kw["daily_application_limit"] = 210
+        if "per_source_daily_limit" not in kw:
+            kw["per_source_daily_limit"] = 30
+        kw.setdefault("auto_apply_enabled", False)
+        kw.setdefault("minimum_match_score", 85.0)
+        kw.setdefault("allow_remote", True)
+        kw.setdefault("allow_hybrid", True)
+        kw.setdefault("allow_onsite", True)
+        kw.setdefault("allow_entry_level", True)
+        kw.setdefault("allow_internships", True)
+        kw.setdefault("blocked_companies", [])
+        kw.setdefault("blocked_keywords", [])
+        kw.setdefault("blocked_roles", [])
+        kw.setdefault("preferred_roles", [])
+        kw.setdefault("blocked_locations", [])
+        kw.setdefault("preferred_locations", [])
+        kw.setdefault("allowed_employment_types", [])
+        super().__init__(**kw)
 
     # Relationships
     user: Mapped["User"] = relationship("User")

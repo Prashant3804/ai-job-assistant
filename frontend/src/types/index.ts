@@ -727,6 +727,19 @@ export interface AutoApplyDailyRoutineInfo {
   next_run_ist?: string;
   last_run?: AutoApplyDailyRun | null;
   total_runs_count: number;
+  daily_total_applied?: number;
+  daily_max_capacity?: number;
+  source_counters?: Record<string, number>;
+  source_limits?: Record<string, number>;
+  ai_provider_status?: {
+    primary_configured?: boolean;
+    primary_provider?: string;
+    fallback_configured?: boolean;
+    fallback_provider?: string;
+    last_provider_used?: string;
+    last_fallback_occurred?: boolean;
+    active_display?: string;
+  };
 }
 
 export interface RecentAutoApplyApplication {

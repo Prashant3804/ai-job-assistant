@@ -108,6 +108,31 @@ class AutoApplyDailyRoutineService:
 
         last_run_read = AutoApplyDailyRunRead.model_validate(last_run, from_attributes=True) if last_run else None
 
+        SEVEN_SOURCES = [
+            "naukri",
+            "indeed",
+            "unstop",
+            "linkedin",
+            "internshala",
+            "wellfound",
+            "career_pages",
+        ]
+        source_counters = {s: 0 for s in SEVEN_SOURCES}
+        source_limits = {s: 30 for s in SEVEN_SOURCES}
+        daily_total = 0
+
+        if last_run and last_run.run_summary_json and "source_counts" in last_run.run_summary_json:
+            for s, cnt in last_run.run_summary_json["source_counts"].items():
+                if s in source_counters:
+                    source_counters[s] = cnt
+            daily_total = sum(source_counters.values())
+        elif last_run:
+            daily_total = (last_run.applied_count or 0) + (last_run.manual_required_count or 0)
+
+        from app.modules.ai.service import get_ai_service
+        ai_svc = get_ai_service()
+        ai_status = ai_svc.get_provider_status() if hasattr(ai_svc, "get_provider_status") else {"active_display": "Gemini (Primary)"}
+
         return AutoApplyDailyRoutineInfo(
             schedule_time_display="10:00 AM IST",
             schedule_timezone="Asia/Kolkata",
@@ -116,7 +141,12 @@ class AutoApplyDailyRoutineService:
             next_run_at=next_run_utc,
             next_run_display=next_run_display,
             last_run=last_run_read,
-            total_runs_count=total_runs
+            total_runs_count=total_runs,
+            daily_total_applied=daily_total,
+            daily_max_capacity=210,
+            source_counters=source_counters,
+            source_limits=source_limits,
+            ai_provider_status=ai_status
         )
 
     async def get_history(self, user_id: uuid.UUID, limit: int = 20) -> List[AutoApplyDailyRunRead]:
@@ -208,6 +238,19 @@ class AutoApplyDailyRoutineService:
             matching_service = MatchingService(self.db)
             agent = ApplicationAgent(self.db)
 
+            SEVEN_SOURCES = [
+                "naukri",
+                "indeed",
+                "unstop",
+                "linkedin",
+                "internshala",
+                "wellfound",
+                "career_pages",
+            ]
+            source_counts = {s: 0 for s in SEVEN_SOURCES}
+            source_limit = policy.per_source_daily_limit or 30
+            max_daily_capacity = policy.daily_application_limit or 210
+
             matching_jobs = 0
             applied_count = 0
             already_applied_count = 0
@@ -243,13 +286,31 @@ class AutoApplyDailyRoutineService:
                     already_applied_count += 1
                     continue
 
+                # Determine canonical source among the 7 sources
+                raw_slug = (job.job_source.slug if job.job_source else getattr(job, 'source', None)) or "career_pages"
+                if raw_slug in ["greenhouse", "lever", "authorized_api", "career_pages"]:
+                    canonical_source = "career_pages"
+                elif raw_slug in SEVEN_SOURCES:
+                    canonical_source = raw_slug
+                else:
+                    canonical_source = "career_pages"
+
+                # Check per-source limit (30 applications max per source)
+                if source_counts[canonical_source] >= source_limit:
+                    skipped_count += 1
+                    continue
+
+                # Check global daily capacity (210 applications max per day)
+                if sum(source_counts.values()) >= max_daily_capacity:
+                    break
+
                 # Evaluate complete policy (blocked keywords, blocked companies, remote rules)
                 is_approved, decision, reason = ApplicationPolicyEngine.evaluate(
                     policy=policy,
                     job=job,
                     match=match,
-                    daily_applications_count=applied_count,
-                    source_daily_applications_count=0
+                    daily_applications_count=sum(source_counts.values()),
+                    source_daily_applications_count=source_counts[canonical_source]
                 )
 
                 if not is_approved:
@@ -263,11 +324,12 @@ class AutoApplyDailyRoutineService:
                     and job.job_source.capability_status == ConnectorCapabilityStatus.SUPPORTED_AUTO_APPLY.value
                 )
 
-                source_slug = job.job_source.slug if job.job_source else (getattr(job, 'source', None) or "direct")
+                source_slug = canonical_source
 
                 if not is_direct_auto:
                     # Platform requires manual candidate submission
                     manual_required_count += 1
+                    source_counts[canonical_source] += 1
                     manual_app = Application(
                         id=uuid.uuid4(),
                         user_id=user_id,
@@ -294,7 +356,8 @@ class AutoApplyDailyRoutineService:
                         "company": job.company_name,
                         "title": job.title,
                         "status": "MANUAL_REQUIRED",
-                        "match_score": score
+                        "match_score": score,
+                        "source": canonical_source
                     })
                     continue
 
@@ -329,13 +392,15 @@ class AutoApplyDailyRoutineService:
 
                 # Process submission through agent
                 result = await agent.process_queue_item(queue_item)
+                source_counts[canonical_source] += 1
                 if result.get("success"):
                     applied_count += 1
                     application_summaries.append({
                         "company": job.company_name,
                         "title": job.title,
                         "status": "APPLIED",
-                        "match_score": score
+                        "match_score": score,
+                        "source": canonical_source
                     })
                 elif result.get("status") == "AUTO_APPLY_UNSUPPORTED":
                     manual_required_count += 1
@@ -343,7 +408,8 @@ class AutoApplyDailyRoutineService:
                         "company": job.company_name,
                         "title": job.title,
                         "status": "MANUAL_REQUIRED",
-                        "match_score": score
+                        "match_score": score,
+                        "source": canonical_source
                     })
                 else:
                     failed_count += 1
@@ -352,7 +418,8 @@ class AutoApplyDailyRoutineService:
                         "title": job.title,
                         "status": "FAILED",
                         "match_score": score,
-                        "reason": result.get("reason")
+                        "reason": result.get("reason"),
+                        "source": canonical_source
                     })
 
             # STEP 8: Finalize Daily Run Record
@@ -365,6 +432,10 @@ class AutoApplyDailyRoutineService:
             run_record.skipped_count = skipped_count
             run_record.completed_at = datetime.now(timezone.utc)
             run_record.run_summary_json = {
+                "source_counts": source_counts,
+                "source_limits": {s: source_limit for s in SEVEN_SOURCES},
+                "total_processed": sum(source_counts.values()),
+                "max_daily_capacity": max_daily_capacity,
                 "applications": application_summaries[:50],
                 "duration_seconds": (run_record.completed_at - run_record.started_at).total_seconds()
             }

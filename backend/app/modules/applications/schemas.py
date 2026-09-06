@@ -210,4 +210,9 @@ class AutoApplyDailyRoutineInfo(BaseModel):
     next_run_display: str
     last_run: Optional[AutoApplyDailyRunRead] = None
     total_runs_count: int = 0
+    daily_total_applied: int = 0
+    daily_max_capacity: int = 210
+    source_counters: Dict[str, int] = Field(default_factory=dict)
+    source_limits: Dict[str, int] = Field(default_factory=dict)
+    ai_provider_status: Optional[Dict[str, Any]] = None
 

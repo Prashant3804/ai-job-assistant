@@ -130,6 +130,18 @@ export default function DashboardPage() {
                     ⚪ Auto-Apply Disabled
                   </span>
                 )}
+
+                {/* AI Engine Status Pill */}
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-sm">
+                  <span
+                    className={`w-2 h-2 rounded-full ${
+                      routine?.ai_provider_status?.last_fallback_occurred
+                        ? 'bg-amber-500'
+                        : 'bg-indigo-500 animate-pulse'
+                    }`}
+                  ></span>
+                  <span>{routine?.ai_provider_status?.active_display || 'Gemini (Primary)'}</span>
+                </span>
               </div>
               <p className="text-xs text-slate-500">
                 Daily Schedule: <span className="font-semibold text-slate-700">Every day at 10:00 AM IST</span> • Automatically matches and processes all eligible jobs
@@ -170,6 +182,77 @@ export default function DashboardPage() {
               >
                 Settings <ArrowUpRight className="w-3.5 h-3.5" />
               </Link>
+            </div>
+          </div>
+
+          {/* Today's Applications Capacity Bar (210 Total Max) */}
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/70 space-y-2.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-bold text-slate-700 flex items-center gap-2">
+                <span>🎯</span> Today&apos;s Application Progress (30 per source • 210 capacity)
+              </span>
+              <span className="font-extrabold text-sky-700 bg-sky-50 px-2 py-0.5 rounded border border-sky-100">
+                {(routine?.daily_total_applied ?? ((lastRun?.applied_count ?? 0) + (lastRun?.manual_required_count ?? 0)))} / 210 Applications
+              </span>
+            </div>
+            <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+              <div
+                className="bg-sky-600 h-full rounded-full transition-all duration-500"
+                style={{
+                  width: `${Math.min(
+                    100,
+                    (((routine?.daily_total_applied ??
+                      (lastRun?.applied_count ?? 0) + (lastRun?.manual_required_count ?? 0)) /
+                      210) *
+                      100)
+                  )}%`,
+                }}
+              />
+            </div>
+          </div>
+
+          {/* 7 Job Sources Daily Pipeline (30 per source) */}
+          <div className="space-y-2">
+            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+              7 Job Sources Daily Quota (30 Applications / Source)
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5">
+              {[
+                { name: 'Naukri', key: 'naukri' },
+                { name: 'Indeed', key: 'indeed' },
+                { name: 'Unstop', key: 'unstop' },
+                { name: 'LinkedIn', key: 'linkedin' },
+                { name: 'Internshala', key: 'internshala' },
+                { name: 'Wellfound', key: 'wellfound' },
+                { name: 'Company Careers', key: 'career_pages' },
+              ].map((source) => {
+                const count =
+                  routine?.source_counters?.[source.key] ??
+                  lastRun?.run_summary_json?.source_counts?.[source.key] ??
+                  0;
+                const limit = routine?.source_limits?.[source.key] ?? 30;
+                const pct = Math.min(100, (count / limit) * 100);
+                return (
+                  <div
+                    key={source.key}
+                    className="p-3 rounded-xl bg-slate-50 border border-slate-100 flex flex-col justify-between"
+                  >
+                    <div className="text-[11px] font-bold text-slate-700 truncate">{source.name}</div>
+                    <div className="mt-1 flex items-baseline justify-between">
+                      <span className="text-base font-extrabold text-slate-900">{count}</span>
+                      <span className="text-[10px] text-slate-400 font-semibold">/ {limit}</span>
+                    </div>
+                    <div className="w-full bg-slate-200 h-1.5 rounded-full overflow-hidden mt-1.5">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          count > 0 ? 'bg-emerald-500' : 'bg-slate-300'
+                        }`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
 

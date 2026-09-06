@@ -11,10 +11,18 @@ export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): 
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE}${endpoint}`, {
-    ...options,
-    headers,
-  });
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${endpoint}`, {
+      ...options,
+      headers,
+    });
+  } catch (netErr: any) {
+    const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'client';
+    throw new Error(
+      `Unable to connect to backend server at ${API_BASE}. Please verify that the backend is running and CORS is configured for ${currentOrigin}. Error: ${netErr?.message || 'Network connection failed'}`
+    );
+  }
 
   if (!res.ok) {
     let errorMsg = `HTTP Error ${res.status}`;
@@ -22,6 +30,19 @@ export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): 
       const err = await res.json();
       errorMsg = err.detail || err.message || errorMsg;
     } catch (_) {}
+
+    if (res.status === 401) {
+      errorMsg = 'Authentication required. Please log in or refresh your session.';
+    } else if (res.status === 403) {
+      errorMsg = 'Access forbidden. You do not have permission for this resource.';
+    } else if (res.status === 404) {
+      errorMsg = `Resource not found at ${endpoint}.`;
+    } else if (res.status === 429) {
+      errorMsg = 'Rate limit exceeded. Please try again in a few moments.';
+    } else if (res.status >= 500) {
+      errorMsg = `Backend server error (${res.status}): ${errorMsg}`;
+    }
+
     throw new Error(errorMsg);
   }
 

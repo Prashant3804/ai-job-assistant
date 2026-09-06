@@ -275,6 +275,126 @@ class GeminiProvider(BaseLLMService):
         parsed = json.loads(clean_json)
         return response_model.model_validate(parsed)
 
+class OpenRouterProvider(BaseLLMService):
+    def __init__(self, api_key: str, base_url: str = "https://openrouter.ai/api/v1", model: str = "google/gemini-flash-1.5"):
+        self.api_key = api_key
+        self.base_url = base_url.rstrip("/")
+        self.model = model
+
+    async def generate_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+        messages = []
+        if system_prompt:
+            messages.append({"role": "system", "content": system_prompt})
+        messages.append({"role": "user", "content": prompt})
+
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "HTTP-Referer": "https://jobassistant.ai",
+            "X-Title": "AI Job Assistant",
+            "Content-Type": "application/json"
+        }
+
+        payload = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": 0.2
+        }
+
+        async with httpx.AsyncClient(timeout=settings.AI_TIMEOUT_SECONDS) as client:
+            res = await client.post(f"{self.base_url}/chat/completions", headers=headers, json=payload)
+            res.raise_for_status()
+            data = res.json()
+            return data["choices"][0]["message"]["content"]
+
+    async def generate_structured(self, prompt: str, system_prompt: Optional[str], response_model: Type[T]) -> T:
+        schema = response_model.model_json_schema()
+        system = (system_prompt or "") + f"\nRespond strictly in valid JSON matching this schema:\n{json.dumps(schema)}"
+        raw_text = await self.generate_text(prompt, system_prompt=system)
+        clean_json = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text.strip())
+        parsed = json.loads(clean_json)
+        return response_model.model_validate(parsed)
+
+    async def generate_embedding(self, text: str) -> List[float]:
+        return await MockAIProvider().generate_embedding(text)
+
+
+class ResilientAIService(BaseLLMService):
+    """Centralized resilient AI service with Gemini as primary and OpenRouter as automatic fallback."""
+
+    def __init__(self):
+        self.gemini_key = settings.GEMINI_API_KEY
+        self.openrouter_key = settings.OPENROUTER_API_KEY
+        self.gemini = GeminiProvider(self.gemini_key) if self.gemini_key else None
+        self.openrouter = OpenRouterProvider(self.openrouter_key, settings.OPENROUTER_BASE_URL, settings.OPENROUTER_MODEL) if self.openrouter_key else None
+        self.mock = MockAIProvider()
+        self.last_provider_used = "mock"
+        self.last_fallback_occurred = False
+
+    def get_provider_status(self) -> Dict[str, Any]:
+        return {
+            "primary_configured": bool(self.gemini_key),
+            "primary_provider": "gemini",
+            "fallback_configured": bool(self.openrouter_key),
+            "fallback_provider": "openrouter",
+            "last_provider_used": self.last_provider_used,
+            "last_fallback_occurred": self.last_fallback_occurred,
+            "active_display": "Gemini (Primary)" if not self.last_fallback_occurred else "OpenRouter (Fallback Active)"
+        }
+
+    async def generate_text(self, prompt: str, system_prompt: Optional[str] = None) -> str:
+        self.last_fallback_occurred = False
+        # 1. Primary: Gemini
+        if self.gemini:
+            try:
+                res = await self.gemini.generate_text(prompt, system_prompt)
+                self.last_provider_used = "gemini"
+                return res
+            except Exception as e:
+                logger.warning(f"[AI FALLBACK] Gemini failed ({e}). Falling back to OpenRouter...")
+                self.last_fallback_occurred = True
+
+        # 2. Fallback: OpenRouter
+        if self.openrouter:
+            try:
+                res = await self.openrouter.generate_text(prompt, system_prompt)
+                self.last_provider_used = "openrouter"
+                return res
+            except Exception as oe:
+                logger.error(f"[AI ERROR] OpenRouter fallback failed ({oe}). Using local deterministic fallback.")
+
+        # 3. Deterministic Local High-Fidelity
+        self.last_provider_used = "mock"
+        return await self.mock.generate_text(prompt, system_prompt)
+
+    async def generate_structured(self, prompt: str, system_prompt: Optional[str], response_model: Type[T]) -> T:
+        self.last_fallback_occurred = False
+        # 1. Primary: Gemini
+        if self.gemini:
+            try:
+                res = await self.gemini.generate_structured(prompt, system_prompt, response_model)
+                self.last_provider_used = "gemini"
+                return res
+            except Exception as e:
+                logger.warning(f"[AI FALLBACK] Gemini structured failed ({e}). Falling back to OpenRouter...")
+                self.last_fallback_occurred = True
+
+        # 2. Fallback: OpenRouter
+        if self.openrouter:
+            try:
+                res = await self.openrouter.generate_structured(prompt, system_prompt, response_model)
+                self.last_provider_used = "openrouter"
+                return res
+            except Exception as oe:
+                logger.error(f"[AI ERROR] OpenRouter structured failed ({oe}). Using local deterministic fallback.")
+
+        # 3. Deterministic Local High-Fidelity
+        self.last_provider_used = "mock"
+        return await self.mock.generate_structured(prompt, system_prompt, response_model)
+
+    async def generate_embedding(self, text: str) -> List[float]:
+        return await self.mock.generate_embedding(text)
+
+
 class OmniRouteServiceAdapter(BaseLLMService):
     """Adapter bridging BaseLLMService to app.ai OmniRoute implementation."""
     def __init__(self):
@@ -293,12 +413,19 @@ class OmniRouteServiceAdapter(BaseLLMService):
     async def generate_embedding(self, text: str) -> List[float]:
         return await self.emb.generate_embedding(text)
 
+
+# Global singleton resilient service
+_resilient_ai_service: Optional[ResilientAIService] = None
+
 def get_ai_service() -> BaseLLMService:
+    global _resilient_ai_service
     provider = settings.DEFAULT_AI_PROVIDER.lower()
-    if provider == "omniroute":
+    if provider in ["gemini", "openrouter"]:
+        if _resilient_ai_service is None:
+            _resilient_ai_service = ResilientAIService()
+        return _resilient_ai_service
+    elif provider == "omniroute":
         return OmniRouteServiceAdapter()
     elif provider == "openai" and settings.OPENAI_API_KEY:
         return OpenAIProvider(settings.OPENAI_API_KEY)
-    elif provider == "gemini" and settings.GEMINI_API_KEY:
-        return GeminiProvider(settings.GEMINI_API_KEY)
     return MockAIProvider()
