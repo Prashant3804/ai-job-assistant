@@ -8,31 +8,21 @@ import {
   BotMessageSquare,
   FileText,
   Search,
-  Sparkles,
   Briefcase,
   Zap,
-  Mail,
   Calendar,
-  BarChart3,
   Settings,
   ShieldCheck,
 } from 'lucide-react';
 
 const navigation = [
   { name: 'Dashboard', href: '/', icon: LayoutDashboard },
-  { name: 'AI Chat', href: '/chat', icon: BotMessageSquare, badge: 'AI' },
+  { name: 'AI Chat', href: '/chat', icon: BotMessageSquare },
   { name: 'My Resume', href: '/resume', icon: FileText },
   { name: 'Find Jobs', href: '/jobs', icon: Search },
-  { name: 'Recommended Jobs', href: '/recommended', icon: Sparkles, highlight: true },
-  { name: 'Match History', href: '/matches', icon: BarChart3 },
   { name: 'Applications', href: '/applications', icon: Briefcase },
-  { name: 'Auto-Apply', href: '/auto-apply', icon: Zap, badge: 'AUTO', highlight: true },
-  { name: 'Mailbox & Recruiter', href: '/mailbox', icon: Mail, badge: 'OAUTH' },
+  { name: 'Auto-Apply', href: '/auto-apply', icon: Zap },
   { name: 'Interviews', href: '/interviews', icon: Calendar },
-  { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-  { name: 'Onboarding', href: '/onboarding', icon: Sparkles, badge: 'SETUP' },
-  { name: 'Integrations', href: '/settings/integrations', icon: ShieldCheck, badge: 'PROD' },
-  { name: 'System Status', href: '/system/status', icon: ShieldCheck },
   { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
@@ -77,11 +67,6 @@ export function Sidebar() {
                 <Icon className={`w-4 h-4 ${isActive ? 'text-sky-400' : 'text-slate-400'}`} />
                 <span>{item.name}</span>
               </div>
-              {item.badge && (
-                <span className="bg-sky-500/20 text-sky-300 border border-sky-500/30 text-[10px] font-bold px-1.5 py-0.5 rounded">
-                  {item.badge}
-                </span>
-              )}
             </Link>
           );
         })}
