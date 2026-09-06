@@ -86,6 +86,12 @@ export const api = {
     fetchApi<any>(`/auto-apply/jobs/${jobId}?immediate=${immediate}`, { method: 'POST' }),
   processApplicationQueue: (batchSize = 5) =>
     fetchApi<any>(`/auto-apply/process-queue?batch_size=${batchSize}`, { method: 'POST' }),
+  getAutoApplyDailyRoutine: () => fetchApi<any>('/auto-apply/daily-routine'),
+  getAutoApplyDailyHistory: (limit = 10) => fetchApi<any[]>(`/auto-apply/daily-routine/history?limit=${limit}`),
+  toggleAutoApplyRoutine: (enabled: boolean) =>
+    fetchApi<any>(`/auto-apply/daily-routine/toggle?enabled=${enabled}`, { method: 'POST' }),
+  triggerAutoApplyDailyRoutineNow: () =>
+    fetchApi<any>('/auto-apply/daily-routine/trigger-now', { method: 'POST' }),
 
   // Resume Intelligence (Phase 2)
   getProfile: () => fetchApi<any>('/resume/profile'),

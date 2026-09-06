@@ -13,7 +13,10 @@ import logging
 import signal
 import sys
 import time
+from datetime import datetime, timezone
 from typing import Optional
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.config import settings
 from app.database.session import AsyncSessionLocal, init_db
@@ -107,7 +110,10 @@ class ProductionWorker:
                     )
                     await session.commit()
 
-                # 3. Periodic Connector Health Check (every 10 cycles)
+                # 3. Daily Auto-Apply Scheduler (10:00 AM IST)
+                await self._check_and_trigger_daily_routine(session)
+
+                # 4. Periodic Connector Health Check (every 10 cycles)
                 if self.cycle_count % 10 == 0:
                     connectors = connector_registry.get_all_capabilities()
                     healthy_count = sum(1 for c in connectors if c.status.value == "HEALTHY")
@@ -118,6 +124,35 @@ class ProductionWorker:
                 await session.rollback()
 
         return cycle_stats
+
+    async def _check_and_trigger_daily_routine(self, session: AsyncSession, now_kolkata: Optional[datetime] = None):
+        """Checks if 10:00 AM Asia/Kolkata (IST) has arrived today and triggers the routine once per calendar day."""
+        from zoneinfo import ZoneInfo
+        from app.database.models.application import AutoApplyDailyRun
+        from app.modules.applications.daily_routine import AutoApplyDailyRoutineService
+
+        if now_kolkata is None:
+            kolkata_tz = ZoneInfo("Asia/Kolkata")
+            now_kolkata = datetime.now(timezone.utc).astimezone(kolkata_tz)
+
+        # Check if the time is at or past 10:00 AM IST today
+        if now_kolkata.hour >= 10:
+            today_str = now_kolkata.strftime("%Y-%m-%d")
+            if getattr(self, "_last_daily_routine_date", None) != today_str:
+                # Also check database to ensure no other worker or process ran today's scheduled run
+                today_start_utc = now_kolkata.replace(hour=0, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+                stmt_today = select(AutoApplyDailyRun).where(AutoApplyDailyRun.started_at >= today_start_utc)
+                existing = (await session.execute(stmt_today)).scalars().first()
+
+                if not existing:
+                    logger.info(f"10:00 AM IST reached ({now_kolkata.strftime('%Y-%m-%d %H:%M:%S %Z')}). Disagreeing with idle; triggering Daily Auto-Apply routine.")
+                    routine_svc = AutoApplyDailyRoutineService(session)
+                    runs = await routine_svc.execute_daily_routine_for_all_active_users(
+                        scheduled_time=now_kolkata.replace(hour=10, minute=0, second=0, microsecond=0).astimezone(timezone.utc)
+                    )
+                    logger.info(f"Daily Auto-Apply routine completed for {len(runs)} users.")
+
+                self._last_daily_routine_date = today_str
 
     async def start(self):
         """Starts the worker processing loop."""

@@ -697,12 +697,59 @@ export interface DashboardSummaryMetrics {
   pending_applications: number;
 }
 
+export interface AutoApplyDailyRun {
+  id: string;
+  user_id: string;
+  scheduled_for: string;
+  started_at: string;
+  completed_at?: string;
+  status: string;
+  jobs_found: number;
+  matching_jobs: number;
+  applied_count: number;
+  already_applied_count: number;
+  manual_required_count: number;
+  failed_count: number;
+  skipped_count: number;
+  error_message?: string;
+  run_summary_json?: Record<string, any>;
+  created_at: string;
+}
+
+export interface AutoApplyDailyRoutineInfo {
+  schedule_time_display: string;
+  schedule_timezone: string;
+  auto_apply_enabled: boolean;
+  enabled?: boolean;
+  status: 'Active' | 'Disabled' | string;
+  next_run_at: string;
+  next_run_display: string;
+  next_run_ist?: string;
+  last_run?: AutoApplyDailyRun | null;
+  total_runs_count: number;
+}
+
+export interface RecentAutoApplyApplication {
+  id: string;
+  company_name: string;
+  job_title: string;
+  role_title?: string;
+  status: string;
+  match_score?: number | null;
+  applied_at?: string;
+  applied_at_display: string;
+  applied_at_ist?: string;
+  submission_method: string;
+}
+
 export interface DashboardAnalytics {
   metrics: DashboardSummaryMetrics;
   funnel: Record<string, number>;
   top_skills_in_demand: { skill: string; count: number }[];
   recent_activities: { id: string; title: string; description: string; created_at: string; event_type: string }[];
   top_recommendations: JobMatch[];
+  auto_apply_routine?: AutoApplyDailyRoutineInfo;
+  recent_auto_apply_applications?: RecentAutoApplyApplication[];
 }
 
 export type MailboxProvider = 'GMAIL' | 'OUTLOOK' | 'MOCK';

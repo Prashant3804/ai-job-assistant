@@ -104,10 +104,49 @@ class AnalyticsService:
         matches_res = await self.db.execute(matches_stmt)
         top_matches = [JobMatchRead.model_validate(m, from_attributes=True) for m in matches_res.scalars().all()]
 
+        # 6. Auto-Apply Routine Info & Recent Auto-Apply Applications
+        from app.modules.applications.daily_routine import AutoApplyDailyRoutineService
+        routine_svc = AutoApplyDailyRoutineService(self.db)
+        routine_info = await routine_svc.get_routine_info(user.id)
+
+        # Recent applications processed via auto-apply / direct API / external portal
+        recent_auto_stmt = (
+            select(Application)
+            .options(selectinload(Application.job))
+            .where(Application.user_id == user.id)
+            .order_by(Application.created_at.desc())
+            .limit(6)
+        )
+        recent_auto_res = await self.db.execute(recent_auto_stmt)
+        recent_auto_apps = recent_auto_res.scalars().all()
+
+        from zoneinfo import ZoneInfo
+        kolkata_tz = ZoneInfo("Asia/Kolkata")
+
+        recent_auto_list = []
+        for a in recent_auto_apps:
+            # Format timestamp in IST
+            ts = a.applied_date or a.submitted_at or a.created_at
+            ist_dt = ts.astimezone(kolkata_tz) if ts else None
+            formatted_date = ist_dt.strftime("%b %d, %Y • %I:%M %p IST") if ist_dt else "Recent"
+
+            recent_auto_list.append({
+                "id": str(a.id),
+                "company_name": a.job.company_name if a.job else "Company",
+                "job_title": a.job.title if a.job else "Job Application",
+                "status": a.status,
+                "match_score": a.match_score,
+                "applied_at": ts.isoformat() if ts else None,
+                "applied_at_display": formatted_date,
+                "submission_method": a.submission_method
+            })
+
         return DashboardAnalytics(
             metrics=metrics,
             funnel=funnel,
             top_skills_in_demand=top_skills,
             recent_activities=recent_activities,
-            top_recommendations=top_matches
+            top_recommendations=top_matches,
+            auto_apply_routine=routine_info.model_dump(mode="json"),
+            recent_auto_apply_applications=recent_auto_list
         )

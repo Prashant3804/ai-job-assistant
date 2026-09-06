@@ -386,6 +386,8 @@ class DashboardAnalytics(BaseModel):
     top_skills_in_demand: List[Dict[str, Any]]
     recent_activities: List[Dict[str, Any]]
     top_recommendations: List[JobMatchRead]
+    auto_apply_routine: Optional[Dict[str, Any]] = None
+    recent_auto_apply_applications: List[Dict[str, Any]] = []
 
 # ----------------- Phase 10: Production Schemas -----------------
 

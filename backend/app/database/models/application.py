@@ -213,3 +213,28 @@ class DeadLetterApplicationQueue(Base, TimestampMixin):
     job: Mapped["Job"] = relationship("Job")
     user: Mapped["User"] = relationship("User")
 
+class AutoApplyDailyRun(Base, TimestampMixin):
+    __tablename__ = "auto_apply_daily_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(GUID, primary_key=True, default=uuid.uuid4)
+    user_id: Mapped[uuid.UUID] = mapped_column(GUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+
+    scheduled_for: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, index=True)
+    started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=False)
+    completed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    status: Mapped[str] = mapped_column(String(50), default="RUNNING", nullable=False, index=True) # RUNNING, COMPLETED, FAILED, PARTIAL
+    jobs_found: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    matching_jobs: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    applied_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    already_applied_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    manual_required_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    failed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    skipped_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+
+    error_message: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    run_summary_json: Mapped[Optional[Dict[str, Any]]] = mapped_column(JSON, default=dict, nullable=True)
+
+    # Relationships
+    user: Mapped["User"] = relationship("User")
+

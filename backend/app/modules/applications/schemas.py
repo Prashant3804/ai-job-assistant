@@ -179,3 +179,35 @@ class ProcessQueueResponse(BaseModel):
     retried_count: int
     skipped_count: int
     details: List[Dict[str, Any]] = []
+
+class AutoApplyDailyRunRead(BaseModel):
+    id: uuid.UUID
+    user_id: uuid.UUID
+    scheduled_for: datetime
+    started_at: datetime
+    completed_at: Optional[datetime] = None
+    status: str
+    jobs_found: int
+    matching_jobs: int
+    applied_count: int
+    already_applied_count: int
+    manual_required_count: int
+    failed_count: int
+    skipped_count: int
+    error_message: Optional[str] = None
+    run_summary_json: Optional[Dict[str, Any]] = None
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+class AutoApplyDailyRoutineInfo(BaseModel):
+    schedule_time_display: str = "10:00 AM IST"
+    schedule_timezone: str = "Asia/Kolkata"
+    auto_apply_enabled: bool
+    status: str # "Active" | "Disabled"
+    next_run_at: datetime
+    next_run_display: str
+    last_run: Optional[AutoApplyDailyRunRead] = None
+    total_runs_count: int = 0
+

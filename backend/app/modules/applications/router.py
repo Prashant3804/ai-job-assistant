@@ -17,9 +17,12 @@ from app.modules.applications.schemas import (
     ApplicationQueueItemRead,
     ApplicationStatisticsRead,
     ProcessQueueRequest,
-    ProcessQueueResponse
+    ProcessQueueResponse,
+    AutoApplyDailyRoutineInfo,
+    AutoApplyDailyRunRead
 )
 from app.modules.applications.service import ApplicationService
+from app.modules.applications.daily_routine import AutoApplyDailyRoutineService
 
 router = APIRouter(tags=["Applications & Auto-Apply"])
 
@@ -173,3 +176,47 @@ async def get_auto_apply_queue(
         )
         for item in items
     ]
+
+# ==================== DAILY AUTO-APPLY ROUTINE (10:00 AM IST) ====================
+
+@router.get("/auto-apply/daily-routine", response_model=AutoApplyDailyRoutineInfo)
+async def get_auto_apply_daily_routine(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    service = AutoApplyDailyRoutineService(db)
+    return await service.get_routine_info(current_user.id)
+
+@router.get("/auto-apply/daily-routine/history", response_model=List[AutoApplyDailyRunRead])
+async def get_auto_apply_daily_history(
+    limit: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    service = AutoApplyDailyRoutineService(db)
+    return await service.get_history(current_user.id, limit=limit)
+
+@router.post("/auto-apply/daily-routine/toggle")
+async def toggle_auto_apply_routine(
+    enabled: bool = Query(..., description="Enable or disable daily auto-apply"),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    app_service = ApplicationService(db)
+    policy = await app_service.get_or_create_policy(current_user.id)
+    policy.auto_apply_enabled = enabled
+    await db.commit()
+    await db.refresh(policy)
+
+    routine_service = AutoApplyDailyRoutineService(db)
+    return await routine_service.get_routine_info(current_user.id)
+
+@router.post("/auto-apply/daily-routine/trigger-now", response_model=AutoApplyDailyRunRead)
+async def trigger_daily_routine_now(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    service = AutoApplyDailyRoutineService(db)
+    run_record = await service.execute_daily_routine_for_user(current_user.id)
+    return AutoApplyDailyRunRead.model_validate(run_record, from_attributes=True)
+
