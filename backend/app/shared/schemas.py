@@ -425,8 +425,23 @@ class AIConfigRead(BaseModel):
     api_key_masked: Optional[str] = None
     timeout_seconds: float = 30.0
     max_retries: int = 3
-    fallback_provider: str = "mock"
+    fallback_provider: str = "omniroute"
     supports_structured: bool = True
+    # Canonical Dual-Provider Architecture
+    primary_provider: str = "gemini"
+    primary_status: str = "AVAILABLE"
+    primary_model: str = "gemini-1.5-flash"
+    primary_configured: bool = False
+    fallback_status: str = "READY"
+    fallback_model: str = "gpt-4o"
+    fallback_configured: bool = False
+    omniroute_base_url: str = "http://localhost:20128/v1"
+    automatic_fallback_enabled: bool = True
+    active_provider: str = "gemini"
+    active_display: str = "Gemini (Primary)"
+    routing: str = "Gemini -> OmniRoute"
+    gemini_api_key_masked: Optional[str] = None
+    omniroute_api_key_masked: Optional[str] = None
 
 class AIConfigUpdate(BaseModel):
     provider: Optional[str] = None
@@ -434,6 +449,11 @@ class AIConfigUpdate(BaseModel):
     model: Optional[str] = None
     timeout_seconds: Optional[float] = None
     max_retries: Optional[int] = None
+    gemini_api_key: Optional[str] = None
+    omniroute_api_key: Optional[str] = None
+    gemini_model: Optional[str] = None
+    omniroute_model: Optional[str] = None
+    omniroute_base_url: Optional[str] = None
 
 class AIConnectionTestResponse(BaseModel):
     status: str # CONNECTED, AUTH_FAILED, RATE_LIMITED, TIMEOUT, UNAVAILABLE, NOT_CONFIGURED
@@ -441,6 +461,13 @@ class AIConnectionTestResponse(BaseModel):
     latency_ms: Optional[float] = None
     model: Optional[str] = None
     message: str
+    # Dual provider diagnostics
+    gemini_status: Optional[str] = None
+    gemini_latency_ms: Optional[float] = None
+    gemini_message: Optional[str] = None
+    omniroute_status: Optional[str] = None
+    omniroute_latency_ms: Optional[float] = None
+    omniroute_message: Optional[str] = None
 
 class OnboardingStateResponse(BaseModel):
     user_id: uuid.UUID

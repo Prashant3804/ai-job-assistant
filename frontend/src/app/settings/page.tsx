@@ -16,7 +16,7 @@ import {
 import { api } from '@/lib/api';
 
 export default function SettingsPage() {
-  const [provider, setProvider] = useState('mock');
+  const [aiConfig, setAiConfig] = useState<any>(null);
   const [targetRoles, setTargetRoles] = useState('');
   const [desiredLocations, setDesiredLocations] = useState('');
   const [minSalary, setMinSalary] = useState(0);
@@ -30,11 +30,13 @@ export default function SettingsPage() {
 
   async function loadSettings() {
     try {
-      const [connRes, userRes] = await Promise.all([
+      const [connRes, userRes, aiRes] = await Promise.all([
         api.getConnectors().catch(() => []),
         api.getMe().catch(() => null),
+        api.getAIConfig().catch(() => null),
       ]);
       setConnectors(Array.isArray(connRes) ? connRes : (connRes as any)?.data || []);
+      if (aiRes) setAiConfig(aiRes);
       if (userRes && userRes.job_preferences && userRes.job_preferences.length > 0) {
         const pref = userRes.job_preferences[0];
         setTargetRoles((pref.desired_titles || []).join(', '));
@@ -93,8 +95,8 @@ export default function SettingsPage() {
             className="p-4 bg-white rounded-xl border border-slate-200 hover:border-indigo-500 shadow-xs transition-all flex flex-col items-center text-center"
           >
             <Cpu className="w-5 h-5 text-indigo-500 mb-1.5" />
-            <span className="text-xs font-bold text-slate-900">AI OmniRoute</span>
-            <span className="text-[10px] text-slate-500 mt-0.5">Model gateway test</span>
+            <span className="text-xs font-bold text-slate-900">AI Engine</span>
+            <span className="text-[10px] text-slate-500 mt-0.5">Gemini + OmniRoute</span>
           </a>
           <a
             href="/system/status"
@@ -113,39 +115,87 @@ export default function SettingsPage() {
           </div>
         )}
 
-        {/* AI Provider Config */}
-        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-4">
-          <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-            <Cpu className="w-4 h-4 text-sky-500" />
-            AI Service Layer & Provider Routing
-          </h3>
-          <p className="text-xs text-slate-500">
-            Select the underlying LLM provider for embeddings, structured JSON extraction, and chat intelligence.
-          </p>
+        {/* AI Provider Architecture Card (Non-selectable, Canonical Dual Provider) */}
+        <div className="bg-white rounded-2xl p-6 border border-slate-200 shadow-sm space-y-5">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-4">
+            <div>
+              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
+                <Cpu className="w-4 h-4 text-sky-500" />
+                AI Provider Architecture
+              </h3>
+              <p className="text-xs text-slate-500 mt-0.5">
+                Autonomous dual-engine routing: Google Gemini operates as Primary with automatic fallback to OmniRoute.
+              </p>
+            </div>
+            <a
+              href="/settings/ai"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold text-sky-700 bg-sky-50 hover:bg-sky-100 rounded-lg border border-sky-200 transition-colors w-fit"
+            >
+              <span>Configure Credentials</span>
+              <span aria-hidden="true">&rarr;</span>
+            </a>
+          </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 pt-2">
-            {[
-              { id: 'mock', name: 'Mock AI (Local)', desc: 'Zero API tokens, offline deterministic execution' },
-              { id: 'openai', name: 'OpenAI (GPT-4o)', desc: 'text-embedding-3 + structured JSON' },
-              { id: 'gemini', name: 'Google Gemini', desc: 'Gemini 1.5 Flash + Pro multimodal' },
-              { id: 'anthropic', name: 'Anthropic Claude', desc: 'Claude 3.5 Sonnet advanced reasoning' },
-            ].map((p) => (
-              <div
-                key={p.id}
-                onClick={() => setProvider(p.id)}
-                className={`p-4 rounded-xl border cursor-pointer transition-all ${
-                  provider === p.id
-                    ? 'border-sky-500 bg-sky-50/50 shadow-xs'
-                    : 'border-slate-200 hover:border-slate-300 bg-white'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-bold text-slate-900">{p.name}</span>
-                  {provider === p.id && <CheckCircle2 className="w-4 h-4 text-sky-600" />}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Primary Provider Card */}
+            <div className="p-4 rounded-xl border-2 border-sky-100 bg-gradient-to-br from-sky-50/40 to-white space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider bg-sky-600 text-white rounded-full">
+                    Primary Provider
+                  </span>
+                  <span className="text-xs font-bold text-slate-900">Google Gemini</span>
                 </div>
-                <p className="text-[11px] text-slate-500 mt-1 leading-snug">{p.desc}</p>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  {aiConfig?.primary_status || 'Available'}
+                </span>
               </div>
-            ))}
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Executes high-speed resume intelligence, multi-dimensional candidate-to-job matching, and structured application responses.
+              </p>
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                <span>Model: <code className="text-sky-700 font-mono font-medium">{aiConfig?.primary_model || 'gemini-1.5-flash'}</code></span>
+                <span>Role: Default Active</span>
+              </div>
+            </div>
+
+            {/* Fallback Provider Card */}
+            <div className="p-4 rounded-xl border-2 border-amber-100 bg-gradient-to-br from-amber-50/30 to-white space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider bg-amber-600 text-white rounded-full">
+                    Fallback Provider
+                  </span>
+                  <span className="text-xs font-bold text-slate-900">OmniRoute</span>
+                </div>
+                <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
+                  <CheckCircle2 className="w-3 h-3 text-sky-600" />
+                  {aiConfig?.fallback_status || 'Hot Standby'}
+                </span>
+              </div>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                Unified model gateway automatically engaged if Gemini reaches rate limits (429), timeouts, or upstream network interruptions.
+              </p>
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
+                <span>Model: <code className="text-amber-800 font-mono font-medium">{aiConfig?.fallback_model || 'gpt-4o'}</code></span>
+                <span>Role: Automatic Fallback</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Autonomous Routing Banner */}
+          <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2 text-slate-700">
+              <span className="font-bold text-slate-900">Routing Policy:</span>
+              <span className="font-mono text-sky-700 font-semibold bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
+                Gemini &rarr; OmniRoute
+              </span>
+              <span className="text-slate-500 text-[11px]">Automatic failover. No manual switching required.</span>
+            </div>
+            <div className="text-[11px] text-slate-500">
+              Active: <strong className="text-slate-800">{aiConfig?.active_display || 'Gemini (Primary)'}</strong>
+            </div>
           </div>
         </div>
 

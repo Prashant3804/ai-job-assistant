@@ -290,7 +290,7 @@ export default function DashboardPage() {
                 {/* AI Resilient Gateway Status */}
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-xs">
                   <Cpu className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>{routine?.ai_provider_status?.active_display || 'Gemini Primary • OpenRouter Fallback'}</span>
+                  <span>{routine?.ai_provider_status?.active_display || 'Gemini Primary • OmniRoute Fallback'}</span>
                 </span>
               </div>
 
@@ -506,7 +506,7 @@ export default function DashboardPage() {
                   <div className="text-[10px] uppercase font-bold text-slate-400">Fallback Provider</div>
                   <div className="font-extrabold text-slate-800 mt-1 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-sky-500"></span>
-                    <span>OpenRouter</span>
+                    <span>OmniRoute</span>
                   </div>
                   <div className="text-[10px] text-slate-500 mt-0.5">Hot Standby</div>
                 </div>
@@ -523,7 +523,7 @@ export default function DashboardPage() {
             <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
               <span className="text-[11px] text-slate-400">
                 {routine?.ai_provider_status?.last_fallback_occurred
-                  ? '⚠️ OpenRouter fallback active'
+                  ? '⚠️ OmniRoute fallback active'
                   : '✓ Primary operations healthy'}
               </span>
               <Link

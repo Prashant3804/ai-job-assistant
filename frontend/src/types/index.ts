@@ -1294,14 +1294,35 @@ export interface AIConfigInfo {
   max_retries: number;
   fallback_provider: string;
   supports_structured: boolean;
+  // Canonical Gemini Primary + OmniRoute Fallback fields
+  primary_provider?: string;
+  primary_status?: string;
+  primary_model?: string;
+  primary_configured?: boolean;
+  fallback_status?: string;
+  fallback_model?: string;
+  fallback_configured?: boolean;
+  omniroute_base_url?: string;
+  automatic_fallback_enabled?: boolean;
+  active_provider?: string;
+  active_display?: string;
+  routing?: string;
+  gemini_api_key_masked?: string;
+  omniroute_api_key_masked?: string;
 }
 
 export interface AIConnectionTestResult {
-  status: 'CONNECTED' | 'AUTH_FAILED' | 'RATE_LIMITED' | 'TIMEOUT' | 'UNAVAILABLE' | 'NOT_CONFIGURED';
+  status: 'CONNECTED' | 'AUTH_FAILED' | 'RATE_LIMITED' | 'TIMEOUT' | 'UNAVAILABLE' | 'NOT_CONFIGURED' | string;
   provider: string;
   latency_ms?: number;
   model?: string;
   message: string;
+  gemini_status?: string;
+  gemini_latency_ms?: number;
+  gemini_message?: string;
+  omniroute_status?: string;
+  omniroute_latency_ms?: number;
+  omniroute_message?: string;
 }
 
 export interface SystemComponentStatusItem {
