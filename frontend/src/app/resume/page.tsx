@@ -25,7 +25,8 @@ import {
   Wrench,
   Users,
 } from 'lucide-react';
-import { api } from '@/lib/api';
+import Link from 'next/link';
+import { api, getAuthToken } from '@/lib/api';
 import {
   StructuredResumeData,
   PersonalDetails,
@@ -84,6 +85,7 @@ export default function ResumeIntelligencePage() {
   const [saving, setSaving] = useState(false);
   const [versioning, setVersioning] = useState(false);
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' } | null>(null);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(true);
 
   // File upload state
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -97,6 +99,13 @@ export default function ResumeIntelligencePage() {
   async function loadInitialData() {
     try {
       setLoading(true);
+      const token = getAuthToken();
+      if (!token) {
+        setIsAuthenticated(false);
+        setLoading(false);
+        return;
+      }
+      setIsAuthenticated(true);
       const resumeList = await api.getResumes();
       setResumes(resumeList);
       if (resumeList && resumeList.length > 0) {
@@ -113,6 +122,7 @@ export default function ResumeIntelligencePage() {
       console.error('Failed to load initial resume data:', err);
       const msg = err?.message || '';
       if (msg.includes('session has expired') || msg.includes('sign in') || msg.includes('Authentication') || msg.includes('401')) {
+        setIsAuthenticated(false);
         notify('Your session has expired. Please sign in again.', 'error');
       }
     } finally {
@@ -147,6 +157,11 @@ export default function ResumeIntelligencePage() {
   // 1. File Upload & Extraction
   async function handleFileUpload(fileToUpload: File) {
     if (!fileToUpload) return;
+    if (!getAuthToken()) {
+      setIsAuthenticated(false);
+      notify('Your session has expired. Please sign in again.', 'error');
+      return;
+    }
     if (fileToUpload.size > 10 * 1024 * 1024) {
       notify('File size exceeds 10MB limit.', 'error');
       return;
@@ -167,10 +182,12 @@ export default function ResumeIntelligencePage() {
       setActiveResumeId(res.resume_id);
       setRawText(res.raw_text || '');
       await loadVersions(res.resume_id);
+      setIsAuthenticated(true);
       notify('Resume extracted and candidate profile updated successfully!');
     } catch (err: any) {
       const msg = err?.message || 'Upload failed.';
       if (msg.includes('session has expired') || msg.includes('sign in') || msg.includes('Authentication') || msg.includes('401')) {
+        setIsAuthenticated(false);
         notify('Your session has expired. Please sign in again.', 'error');
       } else {
         notify(`Extraction failed: ${msg}`, 'error');
@@ -336,6 +353,25 @@ export default function ResumeIntelligencePage() {
               <AlertTriangle className="w-4 h-4 text-rose-600" />
             )}
             <span>{statusMessage.text}</span>
+          </div>
+        )}
+
+        {/* Authentication Warning Banner */}
+        {!isAuthenticated && (
+          <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 flex items-center justify-between text-amber-900 shadow-xs">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+              <div>
+                <p className="text-xs font-bold text-amber-900">Candidate Session Required</p>
+                <p className="text-xs text-amber-700 mt-0.5">Please sign in to upload, parse, and synchronize your resume intelligence.</p>
+              </div>
+            </div>
+            <Link
+              href="/login?redirect=/resume"
+              className="px-3.5 py-1.5 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            >
+              Sign In as Candidate
+            </Link>
           </div>
         )}
 
