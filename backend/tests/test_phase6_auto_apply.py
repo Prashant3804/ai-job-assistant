@@ -2,6 +2,7 @@ import uuid
 import pytest
 import httpx
 from datetime import datetime, timezone
+from unittest.mock import patch
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -588,8 +589,9 @@ async def test_scenario_queue_worker_batch_processing(async_session: AsyncSessio
     app = await app_service.auto_evaluate_and_apply_job(user_id=user_id, job_id=job.id, immediate_process=False)
     assert app.status == ApplicationStatus.QUEUED.value
 
-    # Process batch queue
-    res = await app_service.process_queue(limit=5)
+    # Process batch queue (during open application window)
+    with patch("app.modules.applications.service.is_application_window_open", return_value=True):
+        res = await app_service.process_queue(limit=5)
     assert res.processed_count >= 1
     assert res.successful_count >= 1
     assert len(res.details) >= 1

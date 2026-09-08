@@ -191,15 +191,14 @@ class AutoApplyDailyRoutineService:
         scheduled_time: Optional[datetime] = None
     ) -> AutoApplyDailyRun:
         """Executes the complete 8-step Auto-Apply routine for a single user."""
-        start_time = datetime.now(timezone.utc)
-        if not scheduled_time:
-            scheduled_time = start_time
+        start_time = scheduled_time if scheduled_time else datetime.now(timezone.utc)
+        effective_scheduled = scheduled_time if scheduled_time else start_time
 
         # Create Run record in RUNNING state
         run_record = AutoApplyDailyRun(
             id=uuid.uuid4(),
             user_id=user_id,
-            scheduled_for=scheduled_time,
+            scheduled_for=effective_scheduled,
             started_at=start_time,
             status="RUNNING"
         )
@@ -312,7 +311,7 @@ class AutoApplyDailyRoutineService:
             prep_service = ApplicationPreparationService()
 
             # If window is open, first process any applications staged from previous windows
-            if is_application_window_open():
+            if is_application_window_open(scheduled_time):
                 stmt_staged_q = (
                     select(ApplicationQueueItem)
                     .options(selectinload(ApplicationQueueItem.application), selectinload(ApplicationQueueItem.job))
@@ -494,7 +493,7 @@ class AutoApplyDailyRoutineService:
                     continue
 
                 # Check if Application Execution Window (10:00:00 AM - 11:59:59 AM IST) is currently open
-                window_open = is_application_window_open()
+                window_open = is_application_window_open(scheduled_time)
 
                 if not window_open:
                     # Outside window: Application is fully prepared & matched, but hold for next window
