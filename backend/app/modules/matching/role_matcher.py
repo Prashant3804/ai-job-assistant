@@ -4,14 +4,19 @@ from app.modules.matching.schemas import DimensionScore
 
 ROLE_CLUSTERS = {
     "software_engineering": {
-        "software engineer", "software developer", "sde", "sde i", "sde ii",
+        "software engineer", "software developer", "sde", "sde i", "sde ii", "sde iii",
         "backend engineer", "backend developer", "frontend engineer", "frontend developer",
-        "full stack engineer", "full stack developer", "fullstack developer",
-        "web developer", "applications engineer", "systems engineer"
+        "full stack engineer", "full stack developer", "fullstack developer", "fullstack engineer",
+        "full-stack engineer", "full-stack developer",
+        "web developer", "web engineer", "applications engineer", "systems engineer",
+        "react developer", "react engineer", "python developer", "python engineer",
+        "java developer", "java engineer", "node developer", "node engineer",
+        "mobile developer", "ios developer", "android developer"
     },
     "data_ai": {
         "data engineer", "data scientist", "machine learning engineer",
-        "ai engineer", "ml engineer", "data analyst", "business intelligence analyst"
+        "ai engineer", "ml engineer", "data analyst", "business intelligence analyst",
+        "analytics engineer", "nlp engineer", "deep learning engineer"
     },
     "devops_cloud": {
         "devops engineer", "site reliability engineer", "sre", "cloud engineer",
@@ -39,6 +44,12 @@ class RoleMatcher:
         for cluster_name, titles in ROLE_CLUSTERS.items():
             if any(t in norm or norm in t for t in titles):
                 return cluster_name
+        if any(w in norm for w in ["developer", "engineer", "programmer", "architect", "coder"]):
+            if any(w in norm for w in ["data", "ml", "ai", "machine learning"]):
+                return "data_ai"
+            if any(w in norm for w in ["devops", "sre", "cloud", "infra", "platform"]):
+                return "devops_cloud"
+            return "software_engineering"
         return None
 
     @classmethod

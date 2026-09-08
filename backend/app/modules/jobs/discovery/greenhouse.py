@@ -7,6 +7,7 @@ from app.modules.jobs.discovery.base import BaseDiscoveryProvider
 
 from app.modules.jobs.discovery.location_helper import is_location_eligible
 from app.modules.jobs.discovery.relevance_filter import is_technical_role
+from app.modules.jobs.discovery.tech_extractor import extract_technologies
 
 logger = logging.getLogger("app.jobs.discovery.greenhouse")
 
@@ -88,17 +89,7 @@ class GreenhouseDiscoveryProvider(BaseDiscoveryProvider):
                     app_url = item.get("absolute_url") or f"https://boards.greenhouse.io/{board}/jobs/{job_id}"
 
                     departments = [d.get("name") for d in item.get("departments", []) if isinstance(d, dict) and d.get("name")]
-                    skills = [board.title(), "Software Engineering"]
-                    if "python" in title_lower:
-                        skills.append("Python")
-                    if "backend" in title_lower:
-                        skills.extend(["Backend Development", "APIs"])
-                    if "frontend" in title_lower:
-                        skills.extend(["Frontend Development", "JavaScript", "React"])
-                    if "data" in title_lower:
-                        skills.extend(["Data Engineering", "SQL"])
-                    if "cloud" in title_lower or "platform" in title_lower:
-                        skills.extend(["Cloud Infrastructure", "Docker"])
+                    skills = extract_technologies(title, f"{dept_str} {title}")
 
                     company_name = board.title()
                     remote_type = self.normalize_remote_type(None, loc_str)

@@ -149,11 +149,18 @@ class MatchingService:
                     }
                     for exp in (profile.experiences or [])
                 ],
-                "years_of_experience": float(profile.years_of_experience or 0.0),
+                "years_of_experience": float(
+                    profile.years_of_experience
+                    if (profile.years_of_experience and float(profile.years_of_experience) > 0.0)
+                    else (
+                        __import__("app.modules.resume.date_utils", fromlist=["calculate_total_experience_years"]).calculate_total_experience_years(profile.experiences)
+                        if profile.experiences else 0.0
+                    )
+                ),
                 "location": profile.location,
                 "headline": profile.headline,
                 "summary": profile.summary,
-                "target_roles": profile.target_roles or []
+                "target_roles": profile.target_roles or ([profile.headline] if profile.headline else [])
             }
 
         return candidate_dict, preferences, primary_resume, selected_version
@@ -189,8 +196,11 @@ class MatchingService:
 
         pref_dict = {}
         if preferences:
+            desired_titles = preferences.desired_titles or []
+            if not desired_titles and candidate_dict.get("target_roles"):
+                desired_titles = candidate_dict.get("target_roles")
             pref_dict = {
-                "desired_titles": preferences.desired_titles or [],
+                "desired_titles": desired_titles,
                 "desired_locations": preferences.desired_locations or [],
                 "remote_types": preferences.remote_types or ["REMOTE", "HYBRID"],
                 "min_base_salary": preferences.min_base_salary,

@@ -6,6 +6,7 @@ from app.modules.jobs.connectors.base import NormalizedJob
 from app.modules.jobs.discovery.base import BaseDiscoveryProvider
 from app.modules.jobs.discovery.location_helper import is_location_eligible
 from app.modules.jobs.discovery.relevance_filter import is_technical_role
+from app.modules.jobs.discovery.tech_extractor import extract_technologies
 
 logger = logging.getLogger("app.jobs.discovery.aggregators")
 
@@ -109,10 +110,9 @@ class JSearchAggregatorProvider(BaseDiscoveryProvider):
                     # JSearch result whose original platform cannot be proven -> aggregated_feeds
                     source_platform = "aggregated_feeds"
 
-                skills = ["Software Engineering"]
                 highlights = item.get("job_highlights", {})
-                if isinstance(highlights, dict) and highlights.get("Qualifications"):
-                    skills.extend(highlights.get("Qualifications")[:3])
+                quals = highlights.get("Qualifications") if isinstance(highlights, dict) else None
+                skills = extract_technologies(title, item.get("job_description", ""), existing_skills=quals)
 
                 loc_city = item.get("job_city")
                 loc_country = item.get("job_country")

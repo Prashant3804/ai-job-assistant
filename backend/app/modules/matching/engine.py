@@ -124,8 +124,9 @@ class MatchingEngine:
             weight=self.weights["salary"]
         )
 
+        effective_roles = pref_data.get("desired_titles") or cand_target_roles or ([cand_headline] if cand_headline else [])
         role_dim = RoleMatcher.match(
-            candidate_target_roles=pref_data.get("desired_titles", cand_target_roles),
+            candidate_target_roles=effective_roles,
             candidate_headline=cand_headline,
             job_title=job_title,
             weight=self.weights["role"]

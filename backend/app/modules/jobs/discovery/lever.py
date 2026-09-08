@@ -7,6 +7,7 @@ from app.modules.jobs.discovery.base import BaseDiscoveryProvider
 
 from app.modules.jobs.discovery.location_helper import is_location_eligible
 from app.modules.jobs.discovery.relevance_filter import is_technical_role
+from app.modules.jobs.discovery.tech_extractor import extract_technologies
 
 logger = logging.getLogger("app.jobs.discovery.lever")
 
@@ -93,15 +94,7 @@ class LeverDiscoveryProvider(BaseDiscoveryProvider):
                     emp_type = self.normalize_employment_type(title, commitment)
                     exp_level = self.normalize_experience_level(title)
 
-                    skills = [comp.title(), "Software Engineering"]
-                    if "python" in title_lower:
-                        skills.append("Python")
-                    if "backend" in title_lower:
-                        skills.extend(["Backend Development", "Databases"])
-                    if "frontend" in title_lower:
-                        skills.extend(["Frontend Architecture", "TypeScript"])
-                    if "data" in title_lower:
-                        skills.extend(["Data Pipelines", "SQL"])
+                    skills = extract_technologies(title, f"{cat_str} {title}")
 
                     created_at_ms = item.get("createdAt")
                     posted_dt = (

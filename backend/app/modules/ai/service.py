@@ -396,9 +396,10 @@ class ResilientAIService(BaseLLMService):
     def get_provider_status(self) -> Dict[str, Any]:
         gemini_configured = bool(self.gemini_key)
         omniroute_configured = bool(self.omniroute_key)
-        active_provider = "gemini" if not self.last_fallback_occurred else "omniroute"
+        is_fallback_active = self.last_fallback_occurred and self.last_provider_used != "gemini"
+        active_provider = "gemini" if not is_fallback_active else "omniroute"
         fallback_label = "OpenRouter" if getattr(settings, "OPENROUTER_API_KEY", None) else "OmniRoute"
-        active_display = "Gemini (Primary)" if not self.last_fallback_occurred else f"{fallback_label} (Fallback Active)"
+        active_display = "Gemini (Primary)" if not is_fallback_active else f"{fallback_label} (Fallback Active)"
 
         return {
             "primary_provider": "gemini",
@@ -410,8 +411,8 @@ class ResilientAIService(BaseLLMService):
             "active_provider": active_provider,
             "active_display": active_display,
             "last_provider_used": self.last_provider_used,
-            "last_fallback_occurred": self.last_fallback_occurred,
-            "last_fallback_reason": self.last_fallback_reason,
+            "last_fallback_occurred": is_fallback_active,
+            "last_fallback_reason": self.last_fallback_reason if is_fallback_active else None,
             "automatic_fallback_enabled": True,
             "routing": "Gemini -> OmniRoute"
         }
@@ -426,6 +427,8 @@ class ResilientAIService(BaseLLMService):
             try:
                 res = await self.gemini.generate_text(prompt, system_prompt)
                 self.last_provider_used = "gemini"
+                self.last_fallback_occurred = False
+                self.last_fallback_reason = None
                 return res
             except Exception as e:
                 err_str = str(e).lower()
@@ -473,6 +476,8 @@ class ResilientAIService(BaseLLMService):
             try:
                 res = await self.gemini.generate_structured(prompt, system_prompt, response_model)
                 self.last_provider_used = "gemini"
+                self.last_fallback_occurred = False
+                self.last_fallback_reason = None
                 return res
             except Exception as e:
                 err_str = str(e).lower()

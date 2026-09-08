@@ -6,6 +6,7 @@ from app.modules.jobs.discovery.base import BaseDiscoveryProvider
 
 from app.modules.jobs.discovery.location_helper import is_location_eligible
 from app.modules.jobs.discovery.relevance_filter import is_technical_role
+from app.modules.jobs.discovery.tech_extractor import extract_technologies
 
 logger = logging.getLogger("app.jobs.discovery.public_feeds")
 
@@ -45,7 +46,7 @@ class RemotiveDiscoveryProvider(BaseDiscoveryProvider):
                     continue
 
                 company = item.get("company_name", "Tech Employer")
-                skills = tags if tags else ["Software Engineering", "Python"]
+                skills = extract_technologies(title, item.get("description", ""), existing_skills=tags)
                 app_url = item.get("url", "https://remotive.com")
                 job_id = str(item.get("id"))
 
@@ -113,7 +114,7 @@ class ArbeitnowDiscoveryProvider(BaseDiscoveryProvider):
                     continue
 
                 company = item.get("company_name", "Tech Employer")
-                skills = tags if tags else ["Software Development"]
+                skills = extract_technologies(title, item.get("description", ""), existing_skills=tags)
                 app_url = item.get("url", "https://www.arbeitnow.com")
                 job_id = str(item.get("slug", item.get("id", len(discovered))))
 
@@ -193,7 +194,7 @@ class JobicyDiscoveryProvider(BaseDiscoveryProvider):
                     title=title,
                     description=f"Remote opportunity at {company} for {title}. Discovered via Jobicy Public Feed.",
                     requirements=["Relevant practical software engineering skills"],
-                    skills=["Software Development", "Remote Engineering"],
+                    skills=extract_technologies(title, item.get("jobDescription", ""), existing_skills=[item.get("jobCategory", "")]),
                     experience_required=self.normalize_experience_level(title),
                     education_required="Bachelor's Degree in Computer Science or related field",
                     location=geo,

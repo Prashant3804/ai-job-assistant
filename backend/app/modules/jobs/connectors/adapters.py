@@ -5,13 +5,16 @@ from typing import List, Dict, Any, Optional
 from app.core.config import settings
 from app.modules.jobs.connectors.base import BaseJobConnector, NormalizedJob, JobCapability
 from app.modules.jobs.discovery.orchestrator import get_discovery_orchestrator
+from app.modules.jobs.discovery.tech_extractor import extract_technologies
 
 logger = logging.getLogger("app.jobs.connectors")
 
 def raw_payload_to_normalized_job(source_slug: str, item: Dict[str, Any]) -> NormalizedJob:
     title = item.get("title") or item.get("text") or "Software Engineer"
     company = item.get("company") or item.get("company_name") or item.get("employer_name") or "Tech Employer"
-    skills = item.get("skills") or item.get("tags") or ["Software Engineering"]
+    raw_skills = item.get("skills") or item.get("tags") or []
+    desc_val = item.get("content") or item.get("description") or item.get("job_description") or f"Direct opening at {company} for {title}."
+    skills = extract_technologies(title, desc_val, existing_skills=raw_skills)
     exp = item.get("experience_level")
     if not exp:
         exp = "ENTRY" if any(k in title.lower() for k in ["intern", "trainee", "associate", "junior", "sde i", "sde 1", "entry"]) else "MID_LEVEL"
@@ -23,7 +26,6 @@ def raw_payload_to_normalized_job(source_slug: str, item: Dict[str, Any]) -> Nor
 
     url_val = item.get("url") or item.get("applyUrl") or item.get("absolute_url") or item.get("job_apply_link") or "#"
     canonical_val = item.get("hostedUrl") or item.get("canonical_url") or url_val
-    desc_val = item.get("content") or item.get("description") or item.get("job_description") or f"Direct opening at {company} for {title}."
 
     return NormalizedJob(
         source=source_slug,

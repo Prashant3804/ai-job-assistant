@@ -19,6 +19,7 @@ from app.modules.resume.schemas import (
     ResumeVersionResponse,
 )
 from app.core.exceptions import EntityNotFoundError
+from app.modules.resume.date_utils import calculate_total_experience_years
 
 class CandidateProfileService:
     def __init__(self, db: AsyncSession):
@@ -49,6 +50,12 @@ class CandidateProfileService:
         profile.linkedin_url = payload.personal.linkedin_url or profile.linkedin_url
         profile.github_url = payload.personal.github_url or profile.github_url
         profile.portfolio_url = payload.personal.portfolio_url or profile.portfolio_url
+
+        calculated_years = calculate_total_experience_years(payload.experience)
+        if calculated_years > 0.0:
+            profile.years_of_experience = calculated_years
+        elif profile.years_of_experience is None or profile.years_of_experience == 0.0:
+            profile.years_of_experience = 1.0
 
         # 2. Synchronize Skills
         await self.db.execute(delete(CandidateSkill).where(CandidateSkill.user_profile_id == profile.id))
@@ -175,7 +182,12 @@ class CandidateProfileService:
         profile.preferred_roles = getattr(payload, "preferred_roles", profile.preferred_roles) or profile.preferred_roles
         profile.preferred_locations = getattr(payload, "preferred_locations", profile.preferred_locations) or profile.preferred_locations
         profile.preferred_work_arrangement = getattr(payload, "preferred_work_arrangement", profile.preferred_work_arrangement) or profile.preferred_work_arrangement
-        profile.years_of_experience = getattr(payload, "years_of_experience", profile.years_of_experience) or profile.years_of_experience
+        new_exp = getattr(payload, "years_of_experience", None)
+        if new_exp and float(new_exp) > 0.0:
+            profile.years_of_experience = float(new_exp)
+        elif not profile.years_of_experience or float(profile.years_of_experience) <= 0.0:
+            if profile.experiences:
+                profile.years_of_experience = calculate_total_experience_years(profile.experiences)
         profile.work_authorization = getattr(payload, "work_authorization", profile.work_authorization) or profile.work_authorization
         profile.notice_period = getattr(payload, "notice_period", profile.notice_period) or profile.notice_period
         profile.salary_expectation = getattr(payload, "salary_expectation", profile.salary_expectation) or profile.salary_expectation

@@ -16,6 +16,7 @@ from app.modules.resume.schemas import (
     ProjectItem,
     CertificationItem,
 )
+from app.modules.resume.date_utils import calculate_total_experience_years
 
 UPLOAD_DIR = os.path.abspath(settings.STORAGE_DIR)
 os.makedirs(UPLOAD_DIR, exist_ok=True)
@@ -535,13 +536,14 @@ class SemanticResumeParser:
             uncertain_fields=uncertain_fields,
         )
 
-        years_found = [int(y) for y in re.findall(r'\b(20[0-2][0-9]|19[8-9][0-9])\b', raw_text)]
-        total_exp = 0.0
-        if len(years_found) >= 2:
-            span = max(years_found) - min(years_found)
-            total_exp = min(20.0, float(max(0, span)))
-        elif len(years_found) == 1:
-            total_exp = min(20.0, float(max(0, datetime.now(timezone.utc).year - years_found[0])))
+        total_exp = calculate_total_experience_years(experiences)
+        if total_exp <= 0.0:
+            years_found = [int(y) for y in re.findall(r'\b(20[0-2][0-9]|19[8-9][0-9])\b', raw_text)]
+            if len(years_found) >= 2:
+                span = max(years_found) - min(years_found)
+                total_exp = min(20.0, float(max(0, span)))
+            elif len(years_found) == 1:
+                total_exp = min(20.0, float(max(0, datetime.now(timezone.utc).year - years_found[0])))
 
         return StructuredResumeData(
             personal=personal,
@@ -651,6 +653,9 @@ class ResumeExtractionService:
                         structured.experience or [],
                         structured.skills or CategorizedSkills()
                     )
+
+            if (not structured.total_years_experience or structured.total_years_experience <= 0.0) and structured.experience:
+                structured.total_years_experience = calculate_total_experience_years(structured.experience)
 
             structured.raw_text = raw_text
             structured.extraction_timestamp = datetime.now(timezone.utc).isoformat()

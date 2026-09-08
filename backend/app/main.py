@@ -40,6 +40,9 @@ async def lifespan(app: FastAPI):
     from app.modules.auth.service import ensure_candidate_seed
     await ensure_candidate_seed()
 
+    from app.modules.jobs.discovery.data_sync import sync_database_normalization
+    await sync_database_normalization()
+
     # Phase 1: Start background worker daemon (processes application queue & 10:00 AM IST daily routine)
     import asyncio
     from worker import ProductionWorker
