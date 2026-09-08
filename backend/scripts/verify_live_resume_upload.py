@@ -59,8 +59,8 @@ def main():
         resume_id = upload_data.get("resume_id")
         print(f"   Uploaded Resume ID: {resume_id}")
         structured = upload_data.get("structured_data", {})
-        print(f"   Candidate Name: {structured.get('personal', {}).get('full_name')}")
-        print(f"   Candidate Skills: {structured.get('skills', [])[:5]}")
+        print(f"   Candidate Name: {structured.get('personal', {}).get('name')}")
+        print(f"   Candidate Skills: {structured.get('skills', {})}")
         print(f"   Raw Text preview: {upload_data.get('raw_text', '')[:120]}...")
     else:
         print(f"   Authenticated upload failed: {auth_res.text}")
@@ -83,8 +83,11 @@ def main():
     print(f"   GET /resume/profile status: {profile_res.status_code}")
     if profile_res.status_code == 200:
         profile = profile_res.json()
-        print(f"   Profile Candidate: {profile.get('candidate_profile', {}).get('full_name')}")
-        print(f"   Profile Skills: {profile.get('candidate_profile', {}).get('skills')}")
+        print(f"   Profile Headline: {profile.get('headline')}")
+        print(f"   Profile Location: {profile.get('location')}")
+        print(f"   Profile Skills Count: {len(profile.get('skills', []))}")
+        for s in profile.get('skills', [])[:5]:
+            print(f"     * {s.get('name')} ({s.get('category')})")
     else:
         print(f"   GET /resume/profile error: {profile_res.text}")
 
