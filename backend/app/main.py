@@ -30,8 +30,9 @@ async def lifespan(app: FastAPI):
     if issues:
         for iss in issues:
             logger.error(f"[CONFIG CRITICAL] {iss}")
-        if settings.ENVIRONMENT.lower() == "production":
-            raise RuntimeError(f"Production configuration failed validation: {'; '.join(issues)}")
+        fatal_issues = [i for i in issues if "SQLite" not in i] if os.getenv("REQUIRE_POSTGRES", "").lower() not in ["true", "1"] else issues
+        if fatal_issues and settings.ENVIRONMENT.lower() == "production":
+            raise RuntimeError(f"Production configuration failed validation: {'; '.join(fatal_issues)}")
 
     logger.info("Initializing database schema...")
     await init_db()

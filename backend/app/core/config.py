@@ -236,7 +236,11 @@ class Settings(BaseSettings):
             try:
                 normalized_db = self.get_db_url()
                 if "sqlite" in normalized_db:
-                    issues.append("SQLite database should not be used in production. Please configure a PostgreSQL DATABASE_URL.")
+                    if os.getenv("REQUIRE_POSTGRES", "").lower() in ["true", "1"]:
+                        issues.append("PostgreSQL is required in production (REQUIRE_POSTGRES=true), but SQLite was configured.")
+                    else:
+                        # Allow SQLite on persistent volume or zero-setup environments
+                        pass
             except Exception as e:
                 issues.append(f"Database configuration issue: {str(e)}")
         return issues
