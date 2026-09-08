@@ -1,14 +1,126 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000/api/v1';
 
+const TOKEN_KEYS = ['access_token', 'token', 'authToken', 'jwt'];
+
+export function getAuthToken(): string | null {
+  if (typeof window === 'undefined') return null;
+
+  // 1. Check localStorage
+  for (const key of TOKEN_KEYS) {
+    const val = localStorage.getItem(key);
+    if (val && val !== 'undefined' && val !== 'null' && val.trim().length > 0) {
+      return val.trim();
+    }
+  }
+
+  // 2. Check sessionStorage
+  for (const key of TOKEN_KEYS) {
+    const val = sessionStorage.getItem(key);
+    if (val && val !== 'undefined' && val !== 'null' && val.trim().length > 0) {
+      return val.trim();
+    }
+  }
+
+  // 3. Check document.cookie
+  if (typeof document !== 'undefined' && document.cookie) {
+    for (const key of TOKEN_KEYS) {
+      const match = document.cookie.match(new RegExp(`(?:^|;\\s*)${key}=([^;]+)`));
+      if (match && match[1] && match[1] !== 'undefined' && match[1] !== 'null' && match[1].trim().length > 0) {
+        return decodeURIComponent(match[1].trim());
+      }
+    }
+  }
+
+  return null;
+}
+
+export function setAuthToken(token: string) {
+  if (typeof window === 'undefined') return;
+  const clean = token.trim();
+  localStorage.setItem('access_token', clean);
+  localStorage.setItem('token', clean);
+}
+
+export function clearAuthToken() {
+  if (typeof window === 'undefined') return;
+  for (const key of TOKEN_KEYS) {
+    localStorage.removeItem(key);
+    sessionStorage.removeItem(key);
+    if (typeof document !== 'undefined') {
+      document.cookie = `${key}=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+    }
+  }
+}
+
+export function isTokenExpired(token: string): boolean {
+  try {
+    const parts = token.split('.');
+    if (parts.length !== 3) return false;
+    const payload = JSON.parse(atob(parts[1]));
+    if (payload.exp && typeof payload.exp === 'number') {
+      return Date.now() >= payload.exp * 1000;
+    }
+    return false;
+  } catch (_) {
+    return false;
+  }
+}
+
+export async function fetchMultipart<T>(endpoint: string, formData: FormData): Promise<T> {
+  const token = getAuthToken();
+  if (!token || isTokenExpired(token)) {
+    clearAuthToken();
+    throw new Error('Your session has expired. Please sign in again.');
+  }
+
+  const headers: Record<string, string> = {
+    Authorization: `Bearer ${token}`,
+  };
+
+  let res: Response;
+  try {
+    res = await fetch(`${API_BASE}${endpoint}`, {
+      method: 'POST',
+      headers,
+      body: formData,
+    });
+  } catch (netErr: any) {
+    const currentOrigin = typeof window !== 'undefined' ? window.location.origin : 'client';
+    throw new Error(
+      `Unable to connect to backend server at ${API_BASE}. Please verify that the backend is running and CORS is configured for ${currentOrigin}. Error: ${netErr?.message || 'Network connection failed'}`
+    );
+  }
+
+  if (!res.ok) {
+    if (res.status === 401) {
+      clearAuthToken();
+      throw new Error('Your session has expired. Please sign in again.');
+    }
+    let errorMsg = `HTTP Error ${res.status}`;
+    try {
+      const err = await res.json();
+      errorMsg = err.detail || err.message || errorMsg;
+    } catch (_) {}
+    throw new Error(errorMsg);
+  }
+
+  return res.json();
+}
+
 export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
+  const token = getAuthToken();
+  if (token && isTokenExpired(token)) {
+    clearAuthToken();
+  }
+
+  const activeToken = getAuthToken();
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     ...(options.headers as Record<string, string>),
   };
 
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  if (activeToken) {
+    headers['Authorization'] = `Bearer ${activeToken}`;
   }
 
   let res: Response;
@@ -25,15 +137,17 @@ export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): 
   }
 
   if (!res.ok) {
+    if (res.status === 401) {
+      clearAuthToken();
+      throw new Error('Your session has expired. Please sign in again.');
+    }
     let errorMsg = `HTTP Error ${res.status}`;
     try {
       const err = await res.json();
       errorMsg = err.detail || err.message || errorMsg;
     } catch (_) {}
 
-    if (res.status === 401) {
-      errorMsg = 'Authentication required. Please log in or refresh your session.';
-    } else if (res.status === 403) {
+    if (res.status === 403) {
       errorMsg = 'Access forbidden. You do not have permission for this resource.';
     } else if (res.status === 404) {
       errorMsg = `Resource not found at ${endpoint}.`;
@@ -52,6 +166,24 @@ export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): 
 // API Service Functions
 export const api = {
   // Auth
+  login: async (credentials: { email: string; password: string }) => {
+    const res = await fetchApi<{ access_token: string; token_type: string }>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify(credentials),
+    });
+    if (res?.access_token) {
+      setAuthToken(res.access_token);
+    }
+    return res;
+  },
+  register: (payload: any) =>
+    fetchApi<any>('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  logout: () => {
+    clearAuthToken();
+  },
   getMe: () => fetchApi<any>('/auth/me'),
   updatePreferences: (data: any) => fetchApi<any>('/auth/preferences', { method: 'PUT', body: JSON.stringify(data) }),
 
@@ -132,6 +264,11 @@ export const api = {
   getResumes: () => fetchApi<any>('/resume'),
   getResumeDetail: (resumeId: string) => fetchApi<any>(`/resume/${resumeId}`),
   uploadResumeFile: async (file: File | null, rawText?: string, title: string = 'Master Resume') => {
+    const token = getAuthToken();
+    if (!token || isTokenExpired(token)) {
+      clearAuthToken();
+      throw new Error('Your session has expired. Please sign in again.');
+    }
     const formData = new FormData();
     formData.append('title', title);
     if (file) {
@@ -140,17 +277,7 @@ export const api = {
     if (rawText) {
       formData.append('raw_text', rawText);
     }
-    const token = typeof window !== 'undefined' ? localStorage.getItem('access_token') : null;
-    const res = await fetch(`${API_BASE}/resume/upload`, {
-      method: 'POST',
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      body: formData,
-    });
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Upload failed with status ${res.status}`);
-    }
-    return res.json();
+    return fetchMultipart<any>('/resume/upload', formData);
   },
   reanalyzeResume: (resumeId: string) =>
     fetchApi<any>(`/resume/reanalyze/${resumeId}`, { method: 'POST' }),

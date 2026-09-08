@@ -109,8 +109,12 @@ export default function ResumeIntelligencePage() {
         // Load versions
         loadVersions(primary.id);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load initial resume data:', err);
+      const msg = err?.message || '';
+      if (msg.includes('session has expired') || msg.includes('sign in') || msg.includes('Authentication') || msg.includes('401')) {
+        notify('Your session has expired. Please sign in again.', 'error');
+      }
     } finally {
       setLoading(false);
     }
@@ -120,7 +124,7 @@ export default function ResumeIntelligencePage() {
     try {
       const vList = await api.getResumeVersions(resumeId);
       setVersions(vList);
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load versions:', err);
     }
   }
@@ -165,7 +169,12 @@ export default function ResumeIntelligencePage() {
       await loadVersions(res.resume_id);
       notify('Resume extracted and candidate profile updated successfully!');
     } catch (err: any) {
-      notify(`Extraction failed: ${err.message}`, 'error');
+      const msg = err?.message || 'Upload failed.';
+      if (msg.includes('session has expired') || msg.includes('sign in') || msg.includes('Authentication') || msg.includes('401')) {
+        notify('Your session has expired. Please sign in again.', 'error');
+      } else {
+        notify(`Extraction failed: ${msg}`, 'error');
+      }
     } finally {
       setAnalyzing(false);
       setSelectedFile(null);
@@ -184,7 +193,12 @@ export default function ResumeIntelligencePage() {
       }
       notify('Resume successfully re-analyzed.');
     } catch (err: any) {
-      notify(`Re-analysis failed: ${err.message}`, 'error');
+      const msg = err?.message || '';
+      if (msg.includes('session has expired') || msg.includes('sign in') || msg.includes('Authentication') || msg.includes('401')) {
+        notify('Your session has expired. Please sign in again.', 'error');
+      } else {
+        notify(`Re-analysis failed: ${msg}`, 'error');
+      }
     } finally {
       setAnalyzing(false);
     }
@@ -206,7 +220,12 @@ export default function ResumeIntelligencePage() {
       await api.saveApprovedProfile(payload);
       notify('Candidate profile approved and saved to database!');
     } catch (err: any) {
-      notify(`Save error: ${err.message}`, 'error');
+      const msg = err?.message || '';
+      if (msg.includes('session has expired') || msg.includes('sign in') || msg.includes('Authentication') || msg.includes('401')) {
+        notify('Your session has expired. Please sign in again.', 'error');
+      } else {
+        notify(`Save error: ${msg}`, 'error');
+      }
     } finally {
       setSaving(false);
     }

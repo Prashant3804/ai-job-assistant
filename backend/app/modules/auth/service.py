@@ -106,23 +106,7 @@ async def get_current_user(
     token: Optional[str] = Depends(oauth2_scheme),
     db: AsyncSession = Depends(get_db)
 ) -> User:
-    if not token:
-        # For development/demo mode without token, fetch the default user or seed user if exists
-        stmt = (
-            select(User)
-            .options(
-                selectinload(User.profile).selectinload(UserProfile.skills),
-                selectinload(User.profile).selectinload(UserProfile.educations),
-                selectinload(User.profile).selectinload(UserProfile.experiences),
-                selectinload(User.profile).selectinload(UserProfile.projects),
-                selectinload(User.job_preferences),
-            )
-            .limit(1)
-        )
-        res = await db.execute(stmt)
-        user = res.scalar_one_or_none()
-        if user:
-            return user
+    if not token or not str(token).strip():
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication token required",
