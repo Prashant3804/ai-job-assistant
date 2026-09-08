@@ -1,3 +1,4 @@
+import asyncio
 import os
 import re
 import uuid
@@ -626,7 +627,10 @@ class ResumeExtractionService:
         prompt = f"Extract structured candidate data from the following resume text:\n\n{raw_text[:8000]}"
 
         try:
-            structured = await self.ai.generate_structured(prompt, system_prompt, StructuredResumeData)
+            structured = await asyncio.wait_for(
+                self.ai.generate_structured(prompt, system_prompt, StructuredResumeData),
+                timeout=7.0
+            )
             # Post-process: deduplicate skills
             if structured.skills:
                 structured.skills = self.deduplicate_skills(structured.skills)
