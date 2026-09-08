@@ -136,6 +136,11 @@ class Settings(BaseSettings):
     PUBLIC_FEEDS_ENABLED: bool = True
     DISCOVERY_FALLBACK_TO_TEST_CATALOG: bool = False  # Strictly False in production
 
+    # Testing & Development Seeding Flags (Disabled by default in production)
+    AUTO_SEED_CANDIDATE: bool = False
+    SEED_CANDIDATE_EMAIL: Optional[str] = None
+    SEED_CANDIDATE_PASSWORD: Optional[str] = None
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -153,6 +158,8 @@ class Settings(BaseSettings):
         if self.ENVIRONMENT.lower() == "production":
             if self.DEBUG:
                 issues.append("DEBUG mode must be False in production.")
+            if self.AUTO_SEED_CANDIDATE:
+                issues.append("AUTO_SEED_CANDIDATE must be False in production.")
             if "supersecretkey" in self.SECRET_KEY.lower() or len(self.SECRET_KEY) < 32:
                 issues.append("SECRET_KEY must be a cryptographically secure key with at least 32 characters in production.")
             if "supersecret" in self.MAILBOX_ENCRYPTION_KEY.lower():

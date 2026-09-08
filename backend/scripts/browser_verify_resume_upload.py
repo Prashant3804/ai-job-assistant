@@ -102,8 +102,12 @@ def main():
         time.sleep(1)
 
         print("   Filling login form with candidate credentials...")
-        page.fill('input[type="email"]', "candidate@jobassistant.ai")
-        page.fill('input[type="password"]', "Password123!")
+        test_email = os.getenv("TEST_CANDIDATE_EMAIL", "")
+        test_password = os.getenv("TEST_CANDIDATE_PASSWORD", "")
+        if not test_email or not test_password:
+            raise ValueError("TEST_CANDIDATE_EMAIL and TEST_CANDIDATE_PASSWORD environment variables must be provided.")
+        page.fill('input[type="email"]', test_email)
+        page.fill('input[type="password"]', test_password)
 
         print("   Clicking 'Sign In as Candidate' button...")
         page.click('button[type="submit"]')

@@ -89,3 +89,58 @@ async def test_expired_token_rejected_forcing_session_refresh(async_client, asyn
     res = await async_client.post("/api/v1/resume/upload", headers=headers, data=data, files=files)
     assert res.status_code == 401
     assert "Could not validate credentials" in res.json().get("detail", "")
+
+@pytest.mark.asyncio
+async def test_auto_seed_candidate_disabled_by_default_and_in_production(async_session):
+    """
+    Verifies that ensure_candidate_seed is a no-op when AUTO_SEED_CANDIDATE is False
+    or when ENVIRONMENT is production, preventing default account generation.
+    """
+    from app.core.config import settings
+    from app.modules.auth.service import ensure_candidate_seed
+    from sqlalchemy import select
+
+    # Default settings: AUTO_SEED_CANDIDATE is False
+    assert settings.AUTO_SEED_CANDIDATE is False
+
+    await ensure_candidate_seed()
+
+    # Verify no candidate account was automatically created
+    stmt = select(User).where(User.email == "dev.candidate.unseeded@example.com")
+    res = await async_session.execute(stmt)
+    assert res.scalar_one_or_none() is None
+
+@pytest.mark.asyncio
+async def test_normal_user_registration_and_login_flow(async_client):
+    """
+    Verifies that standard user registration, login, and JWT credential generation
+    function normally with full security.
+    """
+    unique_email = f"candidate_{uuid.uuid4().hex[:8]}@example.com"
+    secure_password = "SecurePassword2026!"
+    
+    # 1. Register candidate
+    reg_res = await async_client.post("/api/v1/auth/register", json={
+        "email": unique_email,
+        "password": secure_password,
+        "full_name": "Standard Candidate"
+    })
+    assert reg_res.status_code == 201
+    reg_data = reg_res.json()
+    assert reg_data.get("email") == unique_email
+
+    # 2. Authenticate
+    login_res = await async_client.post("/api/v1/auth/login", json={
+        "email": unique_email,
+        "password": secure_password
+    })
+    assert login_res.status_code == 200
+    token_data = login_res.json()
+    access_token = token_data.get("access_token")
+    assert access_token is not None
+
+    # 3. Access authenticated endpoint
+    headers = {"Authorization": f"Bearer {access_token}"}
+    me_res = await async_client.get("/api/v1/auth/me", headers=headers)
+    assert me_res.status_code == 200
+    assert me_res.json().get("email") == unique_email

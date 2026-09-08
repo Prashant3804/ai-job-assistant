@@ -11,8 +11,8 @@ function LoginForm() {
   const searchParams = useSearchParams();
   const redirectPath = searchParams.get('redirect') || '/resume';
 
-  const [email, setEmail] = useState('candidate@jobassistant.ai');
-  const [password, setPassword] = useState('Password123!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -83,7 +83,7 @@ function LoginForm() {
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="candidate@jobassistant.ai"
+                placeholder="name@example.com"
                 className="w-full bg-slate-950 border border-slate-700 rounded-xl pl-10 pr-4 py-2.5 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500 transition-colors"
               />
             </div>
@@ -119,21 +119,6 @@ function LoginForm() {
             )}
           </button>
         </form>
-
-        {/* Quick Demo Fill Helper */}
-        <div className="mt-6 pt-5 border-t border-slate-800 text-center">
-          <p className="text-[11px] text-slate-400 mb-2">Using demo production credentials?</p>
-          <button
-            type="button"
-            onClick={() => {
-              setEmail('candidate@jobassistant.ai');
-              setPassword('Password123!');
-            }}
-            className="text-xs font-semibold text-sky-400 hover:text-sky-300 transition-colors cursor-pointer"
-          >
-            Fill Default Candidate Credentials
-          </button>
-        </div>
 
         {/* Security badge */}
         <div className="mt-6 flex items-center justify-center gap-1.5 text-[11px] text-slate-500">

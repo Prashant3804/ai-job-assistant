@@ -1,3 +1,4 @@
+import os
 from playwright.sync_api import sync_playwright
 import base64
 import json
@@ -9,8 +10,12 @@ with sync_playwright() as p:
     browser = p.chromium.launch(headless=True)
     page = browser.new_page()
     page.goto('https://ai-job-assistant-ten-ivory.vercel.app/login')
-    page.fill('input[type="email"]', 'candidate@jobassistant.ai')
-    page.fill('input[type="password"]', 'Password123!')
+    test_email = os.getenv("TEST_CANDIDATE_EMAIL", "")
+    test_password = os.getenv("TEST_CANDIDATE_PASSWORD", "")
+    if not test_email or not test_password:
+        raise ValueError("TEST_CANDIDATE_EMAIL and TEST_CANDIDATE_PASSWORD environment variables required.")
+    page.fill('input[type="email"]', test_email)
+    page.fill('input[type="password"]', test_password)
     page.click('button[type="submit"]')
     page.wait_for_url('**/resume', timeout=15000)
     token = page.evaluate("() => localStorage.getItem('access_token')")

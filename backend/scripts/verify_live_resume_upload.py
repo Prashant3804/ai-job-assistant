@@ -10,10 +10,17 @@ def main():
     print("LIVE RESUME UPLOAD & AUTHENTICATION VERIFICATION")
     print("=" * 60)
 
+    import os
     # Step 1: Login
+    email = os.getenv("TEST_CANDIDATE_EMAIL", "")
+    password = os.getenv("TEST_CANDIDATE_PASSWORD", "")
+    if not email or not password:
+        print("   [SKIP] TEST_CANDIDATE_EMAIL and TEST_CANDIDATE_PASSWORD environment variables required.")
+        return
+
     login_payload = {
-        "email": "candidate@jobassistant.ai",
-        "password": "Password123!",
+        "email": email,
+        "password": password,
     }
     print(f"\n1. Authenticating with candidate credentials against {RAILWAY_API}/auth/login...")
     res = requests.post(f"{RAILWAY_API}/auth/login", json=login_payload, timeout=15)

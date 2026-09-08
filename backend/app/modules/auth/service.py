@@ -7,6 +7,7 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from app.database.session import get_db
 from app.database.models.user import User, UserProfile, JobPreference
+from app.core.config import settings
 from app.core.security import get_password_hash, verify_password, create_access_token, decode_token
 from app.core.exceptions import InvalidCredentialsError, DuplicateEntityError
 from app.shared.schemas import UserRegisterRequest, UserLoginRequest, TokenResponse, UserRead
@@ -131,21 +132,40 @@ async def get_current_user(
     return user
 
 async def ensure_candidate_seed():
+    """
+    Seeds a candidate account ONLY when explicitly enabled via development/test flags.
+    Disabled by default in production (AUTO_SEED_CANDIDATE=False).
+    Never hardcodes default passwords or credentials in source code.
+    """
+    import logging
+    logger = logging.getLogger(__name__)
+
+    # Guard: Never run if auto-seeding is disabled or in production
+    if not settings.AUTO_SEED_CANDIDATE or settings.ENVIRONMENT.lower() == "production":
+        return
+
+    email = settings.SEED_CANDIDATE_EMAIL
+    password = settings.SEED_CANDIDATE_PASSWORD
+
+    if not email or not password:
+        logger.info("[Auth] AUTO_SEED_CANDIDATE is enabled but SEED_CANDIDATE_EMAIL/SEED_CANDIDATE_PASSWORD not provided. Skipping seed.")
+        return
+
     from app.database.session import AsyncSessionLocal
     try:
         async with AsyncSessionLocal() as db:
-            stmt = select(User).where(User.email == "candidate@jobassistant.ai")
+            stmt = select(User).where(User.email == email)
             res = await db.execute(stmt)
             if not res.scalar_one_or_none():
                 service = AuthService(db)
                 await service.register_user(
                     UserRegisterRequest(
-                        email="candidate@jobassistant.ai",
-                        password="Password123!",
-                        full_name="Candidate AI"
+                        email=email,
+                        password=password,
+                        full_name="Candidate SeedTest"
                     )
                 )
+                logger.info(f"[Auth] Seeded test candidate for development: {email}")
     except Exception as e:
-        import logging
-        logging.getLogger(__name__).warning(f"Default candidate seed note: {e}")
+        logger.warning(f"Candidate seed note: {e}")
 
