@@ -9,8 +9,30 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "AI Job Assistant API"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
-    ENVIRONMENT: str = "development"
-    DEBUG: bool = True
+    ENVIRONMENT: str = Field(
+        default_factory=lambda: (
+            os.getenv("ENVIRONMENT")
+            or os.getenv("RAILWAY_ENVIRONMENT_NAME")
+            or os.getenv("RAILWAY_ENVIRONMENT")
+            or os.getenv("NODE_ENV")
+            or "development"
+        ).strip().lower()
+    )
+    DEBUG: bool = Field(
+        default_factory=lambda: (
+            os.getenv("DEBUG", "").strip().lower() in ["true", "1", "yes"]
+            if os.getenv("DEBUG") is not None
+            else (
+                (
+                    os.getenv("ENVIRONMENT")
+                    or os.getenv("RAILWAY_ENVIRONMENT_NAME")
+                    or os.getenv("RAILWAY_ENVIRONMENT")
+                    or os.getenv("NODE_ENV")
+                    or "development"
+                ).strip().lower() != "production"
+            )
+        )
+    )
 
     # Security
     SECRET_KEY: str = "supersecretkey-change-in-production-ai-job-assistant-jwt-secret-2026"
