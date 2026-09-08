@@ -139,6 +139,15 @@ export async function fetchApi<T>(endpoint: string, options: RequestInit = {}): 
   if (!res.ok) {
     if (res.status === 401) {
       clearAuthToken();
+      // Auth endpoints (login / register) represent authentication attempts, not an expired session
+      if (endpoint.includes('/auth/login') || endpoint.includes('/auth/register')) {
+        let authError = 'Invalid email or password. Please try again.';
+        try {
+          const err = await res.json();
+          authError = err.detail || err.message || authError;
+        } catch (_) {}
+        throw new Error(authError);
+      }
       throw new Error('Your session has expired. Please sign in again.');
     }
     let errorMsg = `HTTP Error ${res.status}`;
