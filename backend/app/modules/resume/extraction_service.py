@@ -1,9 +1,10 @@
+from __future__ import annotations
 import asyncio
 import os
 import re
 import uuid
 from datetime import datetime, timezone
-from typing import Optional, List, Dict, Set, Tuple
+from typing import Optional, List, Dict, Set, Tuple, Any
 from app.core.config import settings
 from app.modules.ai.service import BaseLLMService, get_ai_service
 from app.modules.resume.parsers import get_parser_for_file, validate_resume_file
