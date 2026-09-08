@@ -41,8 +41,12 @@ from app.modules.applications.capabilities import PlatformCapabilityManager
 from app.modules.applications.queue import ApplicationQueueService
 from app.modules.applications.agent import ApplicationAgent
 from app.modules.applications.events import ApplicationEventManager
+import logging
 from app.modules.applications.audit import ApplicationAuditLogger
 from app.modules.applications.state_machine import ApplicationStateMachine
+from app.modules.applications.window_service import is_application_window_open
+
+logger = logging.getLogger("app.applications.service")
 
 class ApplicationService:
     def __init__(self, db: AsyncSession):
@@ -417,6 +421,17 @@ class ApplicationService:
         return await queue_service.get_user_queue(user_id)
 
     async def process_queue(self, limit: int = 10) -> ProcessQueueResponse:
+        if not is_application_window_open():
+            logger.info("Application execution window closed (outside 10:00 AM - 11:59 AM IST). Skipping automated queue submission.")
+            return ProcessQueueResponse(
+                processed_count=0,
+                successful_count=0,
+                failed_count=0,
+                retried_count=0,
+                skipped_count=0,
+                details=[]
+            )
+
         queue_service = ApplicationQueueService(self.db)
         due_items = await queue_service.get_due_items(limit=limit)
 
@@ -655,6 +670,15 @@ class ApplicationService:
                 automation_type=auto_type
             )
 
+        # Count total queued for next window across all platforms for this user
+        total_queued_for_next_window = sum(
+            1 for a in all_user_apps
+            if a.status == ApplicationStatus.QUEUED_FOR_NEXT_WINDOW.value
+        )
+
+        from app.modules.applications.window_service import get_application_window_status
+        window_status_dict = get_application_window_status()
+
         return PlatformsDashboardResponse(
             date=date_str,
             schedule_time="10:00 AM IST",
@@ -662,5 +686,7 @@ class ApplicationService:
             total_daily_limit=210,
             total_manual_required_today=total_manual_today,
             total_failed_today=total_failed_today,
+            total_queued_for_next_window=total_queued_for_next_window,
+            application_window=window_status_dict,
             platforms=platforms_map
         )

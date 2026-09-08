@@ -38,6 +38,7 @@ class ApplicationStatus(str, Enum):
     OFFER_RECEIVED = "OFFER_RECEIVED"
     REJECTED = "REJECTED"
     ARCHIVED = "ARCHIVED"
+    QUEUED_FOR_NEXT_WINDOW = "QUEUED_FOR_NEXT_WINDOW"
 
 class PolicyDecision(str, Enum):
     AUTO_APPLY = "AUTO_APPLY"
@@ -55,6 +56,7 @@ class PolicyDecision(str, Enum):
 
 class QueueStatus(str, Enum):
     QUEUED = "QUEUED"
+    QUEUED_FOR_NEXT_WINDOW = "QUEUED_FOR_NEXT_WINDOW"
     PROCESSING = "PROCESSING"
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"

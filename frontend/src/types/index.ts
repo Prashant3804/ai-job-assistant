@@ -717,6 +717,15 @@ export interface AutoApplyDailyRun {
   created_at: string;
 }
 
+export interface ApplicationWindowStatus {
+  is_open: boolean;
+  status: 'OPEN' | 'CLOSED' | string;
+  window_schedule: string;
+  current_time_ist: string;
+  next_window_display: string;
+  timezone?: string;
+}
+
 export interface AutoApplyDailyRoutineInfo {
   schedule_time_display: string;
   schedule_timezone: string;
@@ -742,6 +751,8 @@ export interface AutoApplyDailyRoutineInfo {
     active_display?: string;
   };
   platforms?: Record<string, PlatformStatItem>;
+  application_window?: ApplicationWindowStatus;
+  queued_for_next_window_count?: number;
 }
 
 export interface PlatformStatItem {
@@ -769,6 +780,8 @@ export interface PlatformsDashboardResponse {
   total_daily_limit: number;
   total_manual_required_today: number;
   total_failed_today: number;
+  total_queued_for_next_window?: number;
+  application_window?: ApplicationWindowStatus;
   platforms: Record<string, PlatformStatItem>;
 }
 

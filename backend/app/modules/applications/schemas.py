@@ -281,6 +281,14 @@ class AutoApplyDailyRunRead(BaseModel):
     class Config:
         from_attributes = True
 
+class ApplicationWindowStatus(BaseModel):
+    is_open: bool
+    status: str
+    window_schedule: str
+    current_time_ist: str
+    next_window_display: str
+    timezone: str = "Asia/Kolkata"
+
 class PlatformStatItem(BaseModel):
     name: str
     slug: str
@@ -305,6 +313,8 @@ class PlatformsDashboardResponse(BaseModel):
     total_daily_limit: int = 210
     total_manual_required_today: int = 0
     total_failed_today: int = 0
+    total_queued_for_next_window: int = 0
+    application_window: Optional[ApplicationWindowStatus] = None
     platforms: Dict[str, PlatformStatItem]
 
 class AutoApplyDailyRoutineInfo(BaseModel):
@@ -322,4 +332,6 @@ class AutoApplyDailyRoutineInfo(BaseModel):
     source_limits: Dict[str, int] = Field(default_factory=dict)
     platforms: Optional[Dict[str, PlatformStatItem]] = None
     ai_provider_status: Optional[Dict[str, Any]] = None
+    application_window: Optional[ApplicationWindowStatus] = None
+    queued_for_next_window_count: int = 0
 

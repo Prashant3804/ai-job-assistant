@@ -20,6 +20,7 @@ import {
   ShieldCheck,
   Check,
   Zap,
+  Calendar,
 } from 'lucide-react';
 import { api } from '@/lib/api';
 import { DashboardAnalytics, PlatformStatItem, PlatformsDashboardResponse } from '@/types';
@@ -236,6 +237,17 @@ export default function DashboardPage() {
     platformStats?.total_failed_today ??
     (lastRun?.failed_count ?? 0);
 
+  const totalQueuedForNextWindow =
+    platformStats?.total_queued_for_next_window ??
+    routine?.queued_for_next_window_count ??
+    0;
+
+  const appWindow =
+    platformStats?.application_window ??
+    routine?.application_window ??
+    null;
+  const isWindowOpen = appWindow?.is_open ?? false;
+
   return (
     <div className="flex-1 flex flex-col">
       <Header
@@ -287,6 +299,19 @@ export default function DashboardPage() {
                   </span>
                 )}
 
+                {/* Application Window Badge */}
+                {isWindowOpen ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs" title="Automatic applications allowed until 11:59:59 AM IST">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping"></span>
+                    <span>WINDOW OPEN (10 AM - 12 PM IST)</span>
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-700 border border-slate-200 shadow-xs" title={appWindow?.next_window_display || "Next window: 10:00 AM IST"}>
+                    <Clock className="w-3.5 h-3.5 text-slate-500" />
+                    <span>WINDOW CLOSED • {appWindow?.next_window_display || "Next: 10:00 AM IST"}</span>
+                  </span>
+                )}
+
                 {/* AI Resilient Gateway Status */}
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-xs">
                   <Cpu className="w-3.5 h-3.5 text-indigo-600" />
@@ -295,7 +320,7 @@ export default function DashboardPage() {
               </div>
 
               <p className="text-xs text-slate-500">
-                Daily Schedule: <span className="font-semibold text-slate-700">Every day at 10:00 AM IST</span> • Automatically discovers, matches, and applies across 7 platforms without manual intervention
+                Application Window: <span className="font-semibold text-slate-700">10:00 AM – 11:59 AM IST</span> • 24/7 background worker discovers, matches, and queues jobs continuously
               </p>
             </div>
 
@@ -539,7 +564,7 @@ export default function DashboardPage() {
         {/* ==================================================
             3. GLOBAL OVERVIEW METRICS TILES
            ================================================== */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3">
           <div className="p-4 rounded-xl bg-white border border-slate-200 shadow-xs text-center">
             <div className="text-xs text-slate-500 font-medium">Jobs Found</div>
             <div className="text-xl font-extrabold text-slate-900 mt-1">{totalJobsFound}</div>
@@ -556,6 +581,12 @@ export default function DashboardPage() {
             <div className="text-xs text-emerald-700 font-medium">Submitted Today</div>
             <div className="text-xl font-extrabold text-emerald-700 mt-1">{totalAppliedToday}</div>
             <span className="text-[10px] text-emerald-600 font-medium">Out of 210 limit</span>
+          </div>
+
+          <div className="p-4 rounded-xl bg-white border border-indigo-100 shadow-xs text-center">
+            <div className="text-xs text-indigo-700 font-medium">Queued for Window</div>
+            <div className="text-xl font-extrabold text-indigo-700 mt-1">{totalQueuedForNextWindow}</div>
+            <span className="text-[10px] text-indigo-600 font-medium">10 AM – 12 PM IST</span>
           </div>
 
           <div className="p-4 rounded-xl bg-white border border-amber-100 shadow-xs text-center">
@@ -600,8 +631,8 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* 4 Key Metrics Cards */}
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* 5 Key Metrics Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
             <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 shadow-xs">
               <div className="text-xs font-bold text-emerald-800 uppercase tracking-wide flex items-center gap-1.5">
                 <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Applications Submitted
@@ -609,6 +640,16 @@ export default function DashboardPage() {
               <div className="text-2xl font-black text-emerald-700 mt-2">{totalAppliedToday}</div>
               <p className="text-[11px] text-emerald-600 font-medium mt-0.5">
                 Verified automated submissions
+              </p>
+            </div>
+
+            <div className="p-4 rounded-xl bg-indigo-50/70 border border-indigo-200 shadow-xs">
+              <div className="text-xs font-bold text-indigo-800 uppercase tracking-wide flex items-center gap-1.5">
+                <Clock className="w-4 h-4 text-indigo-600" /> Queued for Next Window
+              </div>
+              <div className="text-2xl font-black text-indigo-700 mt-2">{totalQueuedForNextWindow}</div>
+              <p className="text-[11px] text-indigo-600 font-medium mt-0.5">
+                Eligible &amp; prepared (10 AM IST)
               </p>
             </div>
 
@@ -624,11 +665,11 @@ export default function DashboardPage() {
 
             <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200 shadow-xs">
               <div className="text-xs font-bold text-amber-800 uppercase tracking-wide flex items-center gap-1.5">
-                <ExternalLink className="w-4 h-4 text-amber-600" /> Manual Action Required
+                <ExternalLink className="w-4 h-4 text-amber-600" /> Manual Required
               </div>
               <div className="text-2xl font-black text-amber-700 mt-2">{totalManualRequired}</div>
               <p className="text-[11px] text-amber-600 font-medium mt-0.5">
-                External portals with 1-click apply URL
+                External portals with direct link
               </p>
             </div>
 

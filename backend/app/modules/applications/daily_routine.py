@@ -49,6 +49,12 @@ from app.modules.applications.capability_service import ApplicationCapabilitySer
 from app.modules.jobs.service import JobService
 from app.modules.matching.service import MatchingService
 
+from app.modules.applications.window_service import (
+    is_application_window_open,
+    get_application_window_status,
+    get_next_application_window
+)
+
 logger = logging.getLogger("app.auto_apply.daily_routine")
 
 KOLKATA_TZ = ZoneInfo("Asia/Kolkata")
@@ -133,9 +139,20 @@ class AutoApplyDailyRoutineService:
 
         daily_total = platforms_resp.total_applied_today
 
+        # Count total applications currently queued for next window for this user
+        stmt_window_q = select(func.count(Application.id)).where(
+            and_(
+                Application.user_id == user_id,
+                Application.status == ApplicationStatus.QUEUED_FOR_NEXT_WINDOW.value
+            )
+        )
+        queued_window_count = (await self.db.execute(stmt_window_q)).scalar_one()
+
         from app.modules.ai.service import get_ai_service
         ai_svc = get_ai_service()
         ai_status = ai_svc.get_provider_status() if hasattr(ai_svc, "get_provider_status") else {"active_display": "Gemini (Primary)"}
+
+        window_status_dict = get_application_window_status()
 
         return AutoApplyDailyRoutineInfo(
             schedule_time_display="10:00 AM IST",
@@ -151,7 +168,9 @@ class AutoApplyDailyRoutineService:
             source_counters=source_counters,
             source_limits=source_limits,
             platforms=platforms_map,
-            ai_provider_status=ai_status
+            ai_provider_status=ai_status,
+            application_window=window_status_dict,
+            queued_for_next_window_count=queued_window_count
         )
 
     async def get_history(self, user_id: uuid.UUID, limit: int = 20) -> List[AutoApplyDailyRunRead]:
@@ -292,6 +311,57 @@ class AutoApplyDailyRoutineService:
 
             prep_service = ApplicationPreparationService()
 
+            # If window is open, first process any applications staged from previous windows
+            if is_application_window_open():
+                stmt_staged_q = (
+                    select(ApplicationQueueItem)
+                    .options(selectinload(ApplicationQueueItem.application), selectinload(ApplicationQueueItem.job))
+                    .where(
+                        and_(
+                            ApplicationQueueItem.user_id == user_id,
+                            ApplicationQueueItem.status == QueueStatus.QUEUED_FOR_NEXT_WINDOW.value
+                        )
+                    )
+                    .order_by(ApplicationQueueItem.priority.desc(), ApplicationQueueItem.created_at.asc())
+                )
+                staged_items = list((await self.db.execute(stmt_staged_q)).scalars().all())
+                for s_item in staged_items:
+                    if not is_application_window_open():
+                        logger.info("Application execution window closed (11:59:59 AM IST cutoff reached). Stopping queued dispatch.")
+                        break
+
+                    s_job = s_item.job
+                    s_src = "career_pages"
+                    if s_job and s_job.job_source:
+                        r_slug = s_job.job_source.slug
+                        s_src = r_slug if r_slug in SEVEN_SOURCES else "career_pages"
+
+                    if source_counts[s_src] >= source_limit or sum(source_counts.values()) >= max_daily_capacity:
+                        continue
+
+                    # Transition from QUEUED_FOR_NEXT_WINDOW to QUEUED then submit
+                    if s_item.application:
+                        s_item.application.status = ApplicationStatus.QUEUED.value
+                    s_item.status = QueueStatus.QUEUED.value
+                    await self.db.commit()
+
+                    res = await agent.process_queue_item(s_item)
+                    source_counts[s_src] += 1
+                    if res.get("success"):
+                        applied_count += 1
+                        matching_jobs += 1
+                        application_summaries.append({
+                            "company": s_job.company_name if s_job else "Unknown",
+                            "title": s_job.title if s_job else "Position",
+                            "status": "APPLIED",
+                            "match_score": s_item.application.match_score if s_item.application else 0.0,
+                            "source": s_src,
+                        })
+                    elif res.get("status") == "AUTO_APPLY_UNSUPPORTED":
+                        manual_required_count += 1
+                    else:
+                        failed_count += 1
+
             for job in active_jobs:
                 # Compute or retrieve match score
                 stmt_match = select(JobMatch).where(and_(JobMatch.user_id == user_id, JobMatch.job_id == job.id))
@@ -423,7 +493,67 @@ class AutoApplyDailyRoutineService:
                     })
                     continue
 
-                # Authorized submission candidate
+                # Check if Application Execution Window (10:00:00 AM - 11:59:59 AM IST) is currently open
+                window_open = is_application_window_open()
+
+                if not window_open:
+                    # Outside window: Application is fully prepared & matched, but hold for next window
+                    app = Application(
+                        id=uuid.uuid4(),
+                        user_id=user_id,
+                        job_id=job.id,
+                        source=source_slug,
+                        external_job_id=job.external_id,
+                        status=ApplicationStatus.QUEUED_FOR_NEXT_WINDOW.value,
+                        match_score=score,
+                        eligibility_status=match.eligibility_status if match else "ELIGIBLE",
+                        policy_decision=decision.value,
+                        submission_method=SubmissionMethod.DIRECT_API.value,
+                        failure_reason=None,
+                        metadata_json={
+                            "direct_apply_url": job.apply_url,
+                            "match_score": score,
+                            "cover_letter": prep_package.cover_letter if prep_package else None,
+                            "screening_answers": prep_package.screening_answers if prep_package else [],
+                            "missing_required_fields": prep_package.missing_required_fields if prep_package else [],
+                            "provider_used": prep_package.provider_used if prep_package else "gemini",
+                            "ai_fallback_used": prep_package.ai_fallback_used if prep_package else False,
+                            "queued_reason": "Outside daily application window (10:00 AM – 11:59 AM IST). Prepared and held for next window.",
+                        }
+                    )
+                    self.db.add(app)
+                    await self.db.flush()
+
+                    queue_item = ApplicationQueueItem(
+                        id=uuid.uuid4(),
+                        user_id=user_id,
+                        application_id=app.id,
+                        job_id=job.id,
+                        priority=10,
+                        status=QueueStatus.QUEUED_FOR_NEXT_WINDOW.value
+                    )
+                    self.db.add(queue_item)
+
+                    await ApplicationEventManager.log_event(
+                        self.db, app.id, ApplicationEventType.APPLICATION_CREATED,
+                        title="Application Prepared & Queued For Next Window",
+                        new_status=app.status,
+                        description="Application prepared outside the 10:00 AM - 11:59 AM IST window. Staged for automatic dispatch during the next window."
+                    )
+                    await self.db.commit()
+
+                    application_summaries.append({
+                        "company": job.company_name,
+                        "title": job.title,
+                        "status": "QUEUED_FOR_NEXT_WINDOW",
+                        "match_score": score,
+                        "source": canonical_source,
+                        "provider_used": prep_package.provider_used if prep_package else "gemini",
+                        "ai_fallback_used": prep_package.ai_fallback_used if prep_package else False,
+                    })
+                    continue
+
+                # Authorized submission candidate inside window
                 app = Application(
                     id=uuid.uuid4(),
                     user_id=user_id,
