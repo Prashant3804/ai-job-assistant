@@ -1,11 +1,14 @@
 from __future__ import annotations
 import asyncio
+import logging
 import os
 import re
 import uuid
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Set, Tuple, Any
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 from app.modules.ai.service import BaseLLMService, get_ai_service
 from app.modules.resume.parsers import get_parser_for_file, validate_resume_file
 from app.modules.resume.schemas import (
@@ -269,7 +272,12 @@ class SemanticResumeParser:
             for t in tokens:
                 clean_t = re.sub(r'^[#*\-•–+\s]+|[\(\)]', '', t).strip()
                 if 2 <= len(clean_t) <= 30 and not any(clean_t.lower() in [s.lower() for s in found_skills[c]] for c in found_skills):
-                    if not any(stop in clean_t.lower() for stop in ["skill", "proficien", "technolog"]):
+                    non_skill_keywords = [
+                        "skill", "proficien", "technolog", "placement", "training", "cell", "organiser",
+                        "organizer", "committee", "council", "president", "head", "member", "society",
+                        "club", "volunteer", "activity", "extracurricular", "achieve", "award", "languages"
+                    ]
+                    if ":" not in clean_t and not any(stop in clean_t.lower() for stop in non_skill_keywords):
                         found_skills["tools"].append(clean_t)
 
         skills = CategorizedSkills(
@@ -311,7 +319,7 @@ class SemanticResumeParser:
                 is_curr = bool(end_d and end_d.lower() in ["present", "current"])
 
                 line_no_date = date_pattern.sub('', clean).strip(' -–|(),')
-                company = "Company"
+                company = None
                 role = "Software Engineer"
 
                 if ' - ' in line_no_date or ' – ' in line_no_date:
@@ -326,13 +334,13 @@ class SemanticResumeParser:
                 elif ' | ' in line_no_date:
                     parts = [p.strip() for p in line_no_date.split(' | ')]
                     role = parts[0]
-                    company = parts[1] if len(parts) > 1 else "Company"
+                    company = parts[1] if len(parts) > 1 else None
                 else:
                     role = line_no_date if line_no_date else "Software Engineer"
 
                 current_dict = {
                     "role": role,
-                    "company": company,
+                    "company": company or "Independent / Self-Employed",
                     "start_date": start_d,
                     "end_date": end_d,
                     "is_current": is_curr,
@@ -440,11 +448,16 @@ class SemanticResumeParser:
                 if not clean:
                     continue
                 is_bullet = clean.startswith(('-', '*', '•', '–', '+'))
-                if not is_bullet and len(clean) < 80 and not clean.endswith('.'):
+                is_date_only = bool(re.match(r'^(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{4}|\d{4})\s*(?:[-–—]|to)\s*(?:(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{4}|\d{4}|present|current)\s*$', clean, re.IGNORECASE))
+                is_tech_header = bool(re.match(r'^(?:technologies|tools|stack|tech stack|built with|skills used)\s*:', clean, re.IGNORECASE))
+
+                if not is_bullet and len(clean) < 80 and not clean.endswith('.') and not is_date_only and not is_tech_header:
                     if current_dict:
                         projects.append(ProjectItem(**current_dict))
+                    
+                    name_cand = clean.split(' - ')[0].split(' | ')[0].split(' – ')[0].strip()
                     current_dict = {
-                        "name": clean.split(' - ')[0].split(' | ')[0].strip(),
+                        "name": name_cand,
                         "description": "",
                         "technologies": [],
                         "links": []
@@ -632,7 +645,7 @@ class ResumeExtractionService:
         try:
             structured = await asyncio.wait_for(
                 self.ai.generate_structured(prompt, system_prompt, StructuredResumeData),
-                timeout=7.0
+                timeout=40.0
             )
             # Post-process: deduplicate skills
             if structured.skills:
@@ -661,6 +674,7 @@ class ResumeExtractionService:
             structured.raw_text = raw_text
             structured.extraction_timestamp = datetime.now(timezone.utc).isoformat()
             return structured
-        except Exception:
+        except Exception as exc:
+            logger.warning(f"AI structured resume extraction failed ({type(exc).__name__}: {exc}). Falling back to heuristic semantic parser.")
             # Gracefully recover using deterministic semantic parser
             return self.heuristic_fallback_parse(raw_text)

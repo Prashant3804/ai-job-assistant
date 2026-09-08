@@ -286,10 +286,22 @@ class GeminiProvider(BaseLLMService):
     async def generate_structured(self, prompt: str, system_prompt: Optional[str], response_model: Type[T]) -> T:
         schema = response_model.model_json_schema()
         system = (system_prompt or "") + f"\nRespond strictly in valid JSON matching schema:\n{json.dumps(schema)}"
-        raw_text = await self.generate_text(prompt, system_prompt=system)
-        clean_json = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text.strip())
-        parsed = json.loads(clean_json)
-        return response_model.model_validate(parsed)
+        full_prompt = f"{system}\n\n{prompt}"
+        payload = {
+            "contents": [{"parts": [{"text": full_prompt}]}],
+            "generationConfig": {
+                "temperature": 0.1,
+                "responseMimeType": "application/json"
+            }
+        }
+        async with httpx.AsyncClient(timeout=45.0) as client:
+            res = await client.post(self.base_url, json=payload)
+            res.raise_for_status()
+            data = res.json()
+            raw_text = data["candidates"][0]["content"]["parts"][0]["text"]
+            clean_json = re.sub(r"^```(?:json)?\s*|\s*```$", "", raw_text.strip())
+            parsed = json.loads(clean_json)
+            return response_model.model_validate(parsed)
 
     async def generate_embedding(self, text: str) -> List[float]:
         url = f"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={self.api_key}"
