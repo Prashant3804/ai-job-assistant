@@ -2,7 +2,7 @@ import os
 import urllib.parse
 from typing import List, Optional, Union
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, field_validator
+from pydantic import Field, AliasChoices, field_validator
 from sqlalchemy.engine import make_url
 
 class Settings(BaseSettings):
@@ -12,11 +12,19 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = Field(
         default_factory=lambda: (
             os.getenv("ENVIRONMENT")
+            or os.getenv("environment")
             or os.getenv("RAILWAY_ENVIRONMENT_NAME")
             or os.getenv("RAILWAY_ENVIRONMENT")
             or os.getenv("NODE_ENV")
             or "development"
-        ).strip().lower()
+        ).strip().lower(),
+        validation_alias=AliasChoices(
+            "ENVIRONMENT",
+            "environment",
+            "RAILWAY_ENVIRONMENT_NAME",
+            "RAILWAY_ENVIRONMENT",
+            "NODE_ENV",
+        ),
     )
     DEBUG: bool = Field(
         default_factory=lambda: (
@@ -25,17 +33,24 @@ class Settings(BaseSettings):
             else (
                 (
                     os.getenv("ENVIRONMENT")
+                    or os.getenv("environment")
                     or os.getenv("RAILWAY_ENVIRONMENT_NAME")
                     or os.getenv("RAILWAY_ENVIRONMENT")
                     or os.getenv("NODE_ENV")
                     or "development"
                 ).strip().lower() != "production"
             )
-        )
+        ),
+        validation_alias=AliasChoices("DEBUG", "debug"),
     )
 
     # Security
-    SECRET_KEY: str = "supersecretkey-change-in-production-ai-job-assistant-jwt-secret-2026"
+    SECRET_KEY: str = Field(
+        default_factory=lambda: (
+            os.getenv("SECRET_KEY")
+            or "c52e6f4a8b1d9e3f7a2c5b8d0e4f6a1c8b3d5e7f9a0c2e4b6d8f1a3c5e7b9d1f"
+        )
+    )
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
@@ -89,14 +104,37 @@ class Settings(BaseSettings):
     # Mailbox OAuth Integration (Phase 7)
     GOOGLE_CLIENT_ID: Optional[str] = None
     GOOGLE_CLIENT_SECRET: Optional[str] = None
-    GOOGLE_REDIRECT_URI: str = "http://localhost:8000/api/v1/mailbox/gmail/callback"
+    GOOGLE_REDIRECT_URI: str = Field(
+        default_factory=lambda: (
+            os.getenv("GOOGLE_REDIRECT_URI")
+            or (
+                "https://ai-job-assistant-production-8870.up.railway.app/api/v1/mailbox/gmail/callback"
+                if (os.getenv("ENVIRONMENT") or "").strip().lower() == "production"
+                else "http://localhost:8000/api/v1/mailbox/gmail/callback"
+            )
+        )
+    )
 
     MICROSOFT_CLIENT_ID: Optional[str] = None
     MICROSOFT_CLIENT_SECRET: Optional[str] = None
     MICROSOFT_TENANT_ID: str = "common"
-    MICROSOFT_REDIRECT_URI: str = "http://localhost:8000/api/v1/mailbox/outlook/callback"
+    MICROSOFT_REDIRECT_URI: str = Field(
+        default_factory=lambda: (
+            os.getenv("MICROSOFT_REDIRECT_URI")
+            or (
+                "https://ai-job-assistant-production-8870.up.railway.app/api/v1/mailbox/outlook/callback"
+                if (os.getenv("ENVIRONMENT") or "").strip().lower() == "production"
+                else "http://localhost:8000/api/v1/mailbox/outlook/callback"
+            )
+        )
+    )
 
-    MAILBOX_ENCRYPTION_KEY: str = "supersecret-mailbox-encryption-key-32bytes!!"
+    MAILBOX_ENCRYPTION_KEY: str = Field(
+        default_factory=lambda: (
+            os.getenv("MAILBOX_ENCRYPTION_KEY")
+            or "k8Y_9pQ3vX2wL6mN5jR4tF1zB7cD0eG3hA6sK9uP2wM="
+        )
+    )
     MAILBOX_SYNC_ENABLED: bool = True
     MAILBOX_INITIAL_SYNC_DAYS: int = 90
     MAILBOX_RETENTION_DAYS: int = 180
@@ -166,7 +204,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=True,
+        case_sensitive=False,
         extra="allow"
     )
 
