@@ -7,7 +7,7 @@ from sqlalchemy.engine import make_url
 
 class Settings(BaseSettings):
     PROJECT_NAME: str = "AI Job Assistant API"
-    VERSION: str = "1.0.2-semantic-parser"
+    VERSION: str = "1.0.3-application-window"
     API_V1_STR: str = "/api/v1"
     ENVIRONMENT: str = Field(
         default_factory=lambda: (
