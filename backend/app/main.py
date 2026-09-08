@@ -37,6 +37,9 @@ async def lifespan(app: FastAPI):
     await init_db()
     logger.info("Database schema initialized.")
 
+    from app.modules.auth.service import ensure_candidate_seed
+    await ensure_candidate_seed()
+
     # Phase 1: Start background worker daemon (processes application queue & 10:00 AM IST daily routine)
     import asyncio
     from worker import ProductionWorker

@@ -129,3 +129,23 @@ async def get_current_user(
             detail="User not found",
         )
     return user
+
+async def ensure_candidate_seed():
+    from app.database.session import AsyncSessionLocal
+    try:
+        async with AsyncSessionLocal() as db:
+            stmt = select(User).where(User.email == "candidate@jobassistant.ai")
+            res = await db.execute(stmt)
+            if not res.scalar_one_or_none():
+                service = AuthService(db)
+                await service.register_user(
+                    UserRegisterRequest(
+                        email="candidate@jobassistant.ai",
+                        password="Password123!",
+                        full_name="Candidate AI"
+                    )
+                )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f"Default candidate seed note: {e}")
+
