@@ -103,11 +103,11 @@ export default function RecommendedPage() {
     <div className="flex-1 flex flex-col">
       <Header
         title="AI Recommended Jobs"
-        subtitle="Ranked job matches calculated with 6-dimension deterministic scoring and OmniRoute embeddings"
+        subtitle="Ranked job matches calculated with 6-dimension deterministic scoring and AI semantic embeddings"
       />
 
       <div className="p-8 space-y-6 max-w-7xl w-full mx-auto">
-        {/* OmniRoute & Matching Status Bar */}
+        {/* AI Matching Status Bar */}
         <div className="bg-slate-900 text-white rounded-2xl p-5 shadow-lg border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-sky-500 to-indigo-600 flex items-center justify-center font-bold text-white shadow-md">
@@ -115,7 +115,7 @@ export default function RecommendedPage() {
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h3 className="font-bold text-sm tracking-tight text-white">OmniRoute AI Matching Gateway</h3>
+                <h3 className="font-bold text-sm tracking-tight text-white">AI Matching Gateway</h3>
                 <span
                   className={`text-[10px] font-extrabold px-2 py-0.5 rounded-full border ${
                     health?.omniroute_status === 'CONNECTED'

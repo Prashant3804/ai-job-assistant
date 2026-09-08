@@ -21,19 +21,41 @@ class JobService:
         return hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
 
     async def ingest_normalized_job(self, norm: NormalizedJob) -> Job:
-        """Ingests a normalized job into the database with SHA-256 deduplication and embedding generation."""
+        """Ingests a normalized job into the database with multi-layer deduplication, provenance tracking, and embedding generation."""
+        # 1. Primary deduplication hash
         dedup_hash = self.generate_deduplication_hash(norm.company, norm.title, norm.external_job_id)
 
-        # Check existing job by deduplication hash
+        # 2. Check existing job by deduplication hash
         stmt = select(Job).where(Job.deduplication_hash == dedup_hash)
         res = await self.db.execute(stmt)
         existing = res.scalar_one_or_none()
+
+        # 3. Check existing job by canonical/apply URL
+        if not existing and norm.application_url and norm.application_url != "#":
+            stmt_url = select(Job).where(or_(Job.apply_url == norm.application_url, Job.canonical_url == (norm.canonical_url or norm.application_url)))
+            url_res = await self.db.execute(stmt_url)
+            existing = url_res.scalar_one_or_none()
+
+        # 4. Check existing job by normalized company + title + location
+        if not existing:
+            stmt_ctl = select(Job).where(
+                and_(
+                    func.lower(Job.company_name) == norm.company.strip().lower(),
+                    func.lower(Job.title) == norm.title.strip().lower(),
+                    func.lower(Job.location) == norm.location.strip().lower()
+                )
+            )
+            ctl_res = await self.db.execute(stmt_ctl)
+            existing = ctl_res.scalar_one_or_none()
+
         if existing:
             # Update fields if changed
             existing.description = norm.description
             existing.salary_min = norm.salary_min or existing.salary_min
             existing.salary_max = norm.salary_max or existing.salary_max
             existing.apply_url = norm.application_url or existing.apply_url
+            if norm.discovery_provider and not existing.discovery_provider:
+                existing.discovery_provider = norm.discovery_provider
             await self.db.commit()
             return existing
 
@@ -56,6 +78,14 @@ class JobService:
         emb_text = f"{norm.title} at {norm.company}. {norm.description[:400]}. Skills: {', '.join(norm.skills)}"
         embedding = await self.ai.generate_embedding(emb_text)
 
+        # Parse posted_at safely
+        posted_dt = datetime.now(timezone.utc)
+        if norm.posted_at:
+            try:
+                posted_dt = datetime.fromisoformat(norm.posted_at.replace("Z", "+00:00"))
+            except Exception:
+                posted_dt = datetime.now(timezone.utc)
+
         job = Job(
             job_source_id=job_source.id,
             external_id=norm.external_job_id,
@@ -73,26 +103,37 @@ class JobService:
             preferred_skills=norm.requirements[:3] if norm.requirements else [],
             experience_level=norm.experience_required,
             apply_url=norm.application_url,
+            canonical_url=norm.canonical_url or norm.application_url,
+            discovery_provider=norm.discovery_provider or "direct",
+            source_metadata=norm.source_metadata or {},
             deduplication_hash=dedup_hash,
             embedding=embedding,
             is_active=True,
-            posted_at=datetime.now(timezone.utc)
+            posted_at=posted_dt,
+            discovered_at=datetime.now(timezone.utc)
         )
         self.db.add(job)
         await self.db.commit()
         await self.db.refresh(job)
         return job
 
-    async def sync_all_discovery_sources(self) -> Dict[str, Any]:
-        """Dispatches job discovery across all 10 connectors and ingests new non-duplicate jobs."""
+    async def sync_all_discovery_sources(
+        self,
+        candidate_skills: Optional[List[str]] = None,
+        candidate_location: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Dispatches job discovery across all live connectors and ingests new non-duplicate jobs."""
         connectors = get_all_connectors()
         total_discovered = 0
         new_ingested = 0
+        per_platform_counts: Dict[str, int] = {}
+        query_kw = " ".join(candidate_skills[:3]) if candidate_skills else None
 
         for conn in connectors:
             try:
-                jobs = await conn.search_jobs()
+                jobs = await conn.search_jobs(query=query_kw, location=candidate_location)
                 total_discovered += len(jobs)
+                platform_ingested = 0
                 for norm_job in jobs:
                     # Check if already exists before full ingest
                     dedup_hash = self.generate_deduplication_hash(norm_job.company, norm_job.title, norm_job.external_job_id)
@@ -100,14 +141,18 @@ class JobService:
                     res = await self.db.execute(stmt)
                     if not res.scalar_one_or_none():
                         new_ingested += 1
+                        platform_ingested += 1
                     await self.ingest_normalized_job(norm_job)
+                per_platform_counts[conn.slug] = len(jobs)
             except Exception as e:
+                per_platform_counts[conn.slug] = 0
                 print(f"Error syncing connector {conn.slug}: {e}")
 
         return {
             "total_connectors_synced": len(connectors),
             "total_discovered": total_discovered,
             "new_jobs_ingested": new_ingested,
+            "platform_discovered_counts": per_platform_counts,
             "synced_at": datetime.now(timezone.utc).isoformat()
         }
 

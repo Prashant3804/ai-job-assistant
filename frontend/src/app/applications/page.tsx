@@ -262,6 +262,19 @@ export default function ApplicationsPage() {
                     </select>
                   </div>
 
+                  {app.status === 'EXTERNAL_APPLICATION_REQUIRED' && (
+                    <a
+                      href={app.metadata_json?.direct_apply_url || app.job?.apply_url || '#'}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white rounded-xl text-xs font-bold transition-colors shadow-xs"
+                      title="Open external application portal"
+                    >
+                      <span>Open Application</span>
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  )}
+
                   <Link
                     href={`/applications/${app.id}`}
                     className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 hover:text-slate-900 transition-colors"

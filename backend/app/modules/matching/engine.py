@@ -120,6 +120,7 @@ class MatchingEngine:
             job_salary_min=job_sal_min,
             job_salary_max=job_sal_max,
             currency=job_currency,
+            candidate_currency=pref_currency,
             weight=self.weights["salary"]
         )
 

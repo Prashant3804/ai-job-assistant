@@ -102,7 +102,7 @@ export default function SystemStatusPage() {
     <div className="flex-1 flex flex-col bg-slate-950 text-slate-100 min-h-screen">
       <Header
         title="Production System Status & Telemetry"
-        subtitle="Real-time health telemetry across Database, OmniRoute, Mailbox, and Platform Connectors"
+        subtitle="Real-time health telemetry across Database, AI Gateway, Mailbox, and Platform Connectors"
       />
 
       <div className="max-w-6xl w-full mx-auto p-6 space-y-6">

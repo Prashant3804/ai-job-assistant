@@ -36,7 +36,7 @@ export default function JobPreferencesPage() {
   const [preferredCompanies, setPreferredCompanies] = useState('');
   const [blockedCompanies, setBlockedCompanies] = useState('');
   const [blockedKeywords, setBlockedKeywords] = useState('');
-  const [minScore, setMinScore] = useState(70);
+  const [minScore, setMinScore] = useState(65);
   const [freshnessDays, setFreshnessDays] = useState(30);
 
   useEffect(() => {
@@ -60,7 +60,7 @@ export default function JobPreferencesPage() {
       setPreferredCompanies((data.preferred_companies || []).join(', '));
       setBlockedCompanies((data.blocked_companies || []).join(', '));
       setBlockedKeywords((data.blocked_keywords || []).join(', '));
-      setMinScore(data.minimum_match_score || 70);
+      setMinScore(data.minimum_match_score || 65);
       setFreshnessDays(data.job_freshness_days || 30);
     } catch (err: any) {
       console.error('Failed to load job preferences:', err);

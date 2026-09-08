@@ -54,6 +54,10 @@ class Job(Base, TimestampMixin):
     
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     posted_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=True)
+    discovered_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc), nullable=True)
+    discovery_provider: Mapped[Optional[str]] = mapped_column(String(100), nullable=True, index=True)
+    canonical_url: Mapped[Optional[str]] = mapped_column(String(1000), nullable=True)
+    source_metadata: Mapped[Optional[dict]] = mapped_column(JSON, default=dict, nullable=True)
 
     # Relationships
     job_source: Mapped[Optional["JobSource"]] = relationship("JobSource", back_populates="jobs")

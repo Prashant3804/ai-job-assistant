@@ -57,7 +57,7 @@ class ProductionWorker:
         for sig in (signal.SIGINT, signal.SIGTERM):
             try:
                 signal.signal(sig, self.handle_signal)
-            except (ValueError, AttributeError) as err:
+            except Exception as err:
                 logger.debug(f"Could not register signal {sig}: {err}")
 
         # Windows-specific SIGBREAK if available

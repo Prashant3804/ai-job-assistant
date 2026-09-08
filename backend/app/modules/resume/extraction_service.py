@@ -94,27 +94,38 @@ class ResumeExtractionService:
         if not phone:
             uncertain_fields.append("phone")
 
+        headline = lines[1] if len(lines) > 1 and len(lines[1]) <= 60 else "Candidate Profile"
+        summary = lines[1] if len(lines) > 1 and len(lines[1]) > 30 else None
+
+        # Detect candidate location from known tech hubs if present in raw text
+        detected_location = None
+        loc_candidates = ["Bengaluru", "Bangalore", "Hyderabad", "Pune", "Mumbai", "Delhi", "Gurgaon", "Noida", "Chennai", "San Francisco", "New York", "London", "Remote"]
+        for loc in loc_candidates:
+            if re.search(r'\b' + re.escape(loc.lower()) + r'\b', raw_text.lower()):
+                detected_location = loc
+                break
+
         personal = PersonalDetails(
             name=name,
             email=email,
             phone=phone,
-            location="San Francisco, CA" if "san francisco" in raw_text.lower() else None,
+            location=detected_location,
             linkedin_url=linkedin_url,
             github_url=github_url,
-            headline="Full Stack / Backend Software Engineer",
-            summary=lines[1] if len(lines) > 1 and len(lines[1]) > 30 else "Experienced software engineer.",
-            is_uncertain=len(uncertain_fields) > 0,
-            uncertain_fields=uncertain_fields,
+            headline=headline,
+            summary=summary,
+            is_uncertain=True,
+            uncertain_fields=uncertain_fields + ["parsed_via_heuristic_fallback"],
         )
 
-        # 2. Skills extraction via known dictionary match
+        # 2. Skills extraction via known dictionary match (strictly present in raw_text)
         tech_dict = {
-            "programming_languages": ["Python", "JavaScript", "TypeScript", "Go", "Java", "C++", "Rust", "SQL"],
-            "frameworks": ["FastAPI", "React", "Next.js", "Django", "Node.js", "Express", "TailwindCSS"],
-            "databases": ["PostgreSQL", "MySQL", "MongoDB", "Redis", "SQLite", "DynamoDB", "pgvector"],
-            "cloud": ["AWS", "GCP", "Azure", "Cloudflare", "Docker", "Kubernetes"],
-            "tools": ["Git", "GitHub Actions", "Docker", "Jira", "Postman", "Linux"],
-            "soft_skills": ["Team Leadership", "Cross-Functional Collaboration", "System Design", "Agile Methodologies"]
+            "programming_languages": ["Python", "JavaScript", "TypeScript", "Go", "Java", "C++", "C#", "Rust", "SQL", "PHP", "Ruby"],
+            "frameworks": ["FastAPI", "React", "Next.js", "Django", "Node.js", "Express", "TailwindCSS", "Spring Boot", "Angular", "Vue"],
+            "databases": ["PostgreSQL", "MySQL", "MongoDB", "Redis", "SQLite", "DynamoDB", "pgvector", "Cassandra", "Oracle"],
+            "cloud": ["AWS", "GCP", "Azure", "Cloudflare", "Docker", "Kubernetes", "Terraform"],
+            "tools": ["Git", "GitHub Actions", "Docker", "Jira", "Postman", "Linux", "VS Code"],
+            "soft_skills": ["Team Leadership", "Cross-Functional Collaboration", "System Design", "Agile Methodologies", "Communication"]
         }
 
         found_skills = {k: [] for k in tech_dict}
@@ -134,41 +145,39 @@ class ResumeExtractionService:
         )
         skills = self.deduplicate_skills(skills)
 
-        # 3. Education extraction
+        # 3. Education extraction - only if explicit degree text is present
         education: List[EducationItem] = []
-        if re.search(r'\b(bachelor|master|phd|b\.s\.|m\.s\.|b\.tech)\b', lower_text):
+        deg_match = re.search(r'\b(bachelor|master|phd|b\.s\.|m\.s\.|b\.tech|m\.tech|bca|mca)\b', lower_text)
+        if deg_match:
+            # Extract graduation year if a 4-digit year near 2000-2030 is found
+            year_match = re.search(r'\b(20[0-2][0-9])\b', raw_text)
             education.append(EducationItem(
-                degree="Bachelor of Science",
-                institution="University" if "university" in lower_text else "College of Engineering",
-                field_of_study="Computer Science",
-                graduation_year="2021",
-                cgpa="3.8" if "3.8" in raw_text else None,
+                degree=deg_match.group(0).upper(),
+                institution="Institution / University",
+                field_of_study="Technical Studies",
+                graduation_year=year_match.group(0) if year_match else None,
+                cgpa=None,
             ))
 
-        # 4. Experience extraction
+        # 4. Experience extraction - do not invent fake companies or roles
         experience: List[ExperienceItem] = []
-        experience.append(ExperienceItem(
-            company="Technology Company",
-            role="Senior Software Engineer",
-            start_date="2022-01",
-            end_date="Present",
-            is_current=True,
-            responsibilities=[
-                "Architected scalable backend microservices and database query optimization.",
-                "Built automated CI/CD deployment pipelines cutting release cycles."
-            ],
-            technologies=skills.programming_languages[:3] + skills.frameworks[:2]
-        ))
 
-        # 5. Projects
+        # 5. Projects - truthful extraction only
         projects: List[ProjectItem] = []
-        if "project" in lower_text or "github" in lower_text:
+        if github_url:
             projects.append(ProjectItem(
-                name="AI Search & Retrieval Pipeline",
-                description="Engineered vector search system with semantic ranking.",
-                technologies=["Python", "FastAPI", "PostgreSQL"],
-                links=[github_url] if github_url else []
+                name="GitHub Portfolio Projects",
+                description="Projects referenced on candidate GitHub profile.",
+                technologies=skills.programming_languages[:3],
+                links=[github_url]
             ))
+
+        # Estimate years of experience from year ranges found in text
+        years_found = [int(y) for y in re.findall(r'\b(20[0-2][0-9])\b', raw_text)]
+        total_exp = 0.0
+        if len(years_found) >= 2:
+            span = max(years_found) - min(years_found)
+            total_exp = min(15.0, float(max(0, span)))
 
         return StructuredResumeData(
             personal=personal,
@@ -179,7 +188,7 @@ class ResumeExtractionService:
             certifications=[],
             raw_text=raw_text,
             extraction_timestamp=datetime.now(timezone.utc).isoformat(),
-            total_years_experience=4.0
+            total_years_experience=total_exp
         )
 
     async def extract_and_structure_resume(self, raw_text: str) -> StructuredResumeData:

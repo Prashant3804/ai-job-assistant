@@ -31,6 +31,7 @@ export type ApplicationStatus =
   | 'BLOCKED'
   | 'DUPLICATE'
   | 'AUTO_APPLY_UNSUPPORTED'
+  | 'EXTERNAL_APPLICATION_REQUIRED'
   | 'MISSING_INFORMATION'
   | 'DRAFT';
 

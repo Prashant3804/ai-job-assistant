@@ -213,7 +213,7 @@ export function MatchBreakdownModal({ match, onClose, onApply }: MatchBreakdownM
           <div className="p-4 bg-sky-50/60 rounded-xl border border-sky-200">
             <div className="flex items-center justify-between mb-1.5">
               <span className="text-xs font-bold uppercase tracking-wider text-sky-800 flex items-center gap-1.5">
-                <Sparkles className="w-4 h-4 text-sky-600" /> OmniRoute AI Match Explanation
+                <Sparkles className="w-4 h-4 text-sky-600" /> AI Match Explanation
               </span>
               <span className="text-[10px] bg-white px-2 py-0.5 rounded border border-sky-200 text-sky-700 font-medium">
                 {match.embedding_model ? `Embedding: ${match.embedding_model}` : 'Deterministic fallback active'}

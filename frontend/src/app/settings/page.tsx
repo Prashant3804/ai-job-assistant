@@ -96,7 +96,7 @@ export default function SettingsPage() {
           >
             <Cpu className="w-5 h-5 text-indigo-500 mb-1.5" />
             <span className="text-xs font-bold text-slate-900">AI Engine</span>
-            <span className="text-[10px] text-slate-500 mt-0.5">Gemini + OmniRoute</span>
+            <span className="text-[10px] text-slate-500 mt-0.5">Gemini + OpenRouter</span>
           </a>
           <a
             href="/system/status"
@@ -124,7 +124,7 @@ export default function SettingsPage() {
                 AI Provider Architecture
               </h3>
               <p className="text-xs text-slate-500 mt-0.5">
-                Autonomous dual-engine routing: Google Gemini operates as Primary with automatic fallback to OmniRoute.
+                Autonomous dual-engine routing: Google Gemini operates as Primary with automatic fallback to OpenRouter.
               </p>
             </div>
             <a
@@ -138,25 +138,25 @@ export default function SettingsPage() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Primary Provider Card */}
-            <div className="p-4 rounded-xl border-2 border-sky-100 bg-gradient-to-br from-sky-50/40 to-white space-y-3">
+            <div className="p-4 rounded-xl border-2 border-emerald-100 bg-gradient-to-br from-emerald-50/30 to-white space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider bg-sky-600 text-white rounded-full">
+                  <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider bg-emerald-600 text-white rounded-full">
                     Primary Provider
                   </span>
                   <span className="text-xs font-bold text-slate-900">Google Gemini</span>
                 </div>
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
                   <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                  {aiConfig?.primary_status || 'Available'}
+                  {aiConfig?.primary_status || 'Active'}
                 </span>
               </div>
               <p className="text-xs text-slate-600 leading-relaxed">
-                Executes high-speed resume intelligence, multi-dimensional candidate-to-job matching, and structured application responses.
+                Direct integration with Gemini 1.5 Flash for high-speed, cost-efficient resume intelligence and tailored application drafting.
               </p>
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                <span>Model: <code className="text-sky-700 font-mono font-medium">{aiConfig?.primary_model || 'gemini-1.5-flash'}</code></span>
-                <span>Role: Default Active</span>
+                <span>Model: <code className="text-emerald-800 font-mono font-medium">{aiConfig?.primary_model || 'gemini-1.5-flash'}</code></span>
+                <span>Role: Primary Engine</span>
               </div>
             </div>
 
@@ -167,7 +167,7 @@ export default function SettingsPage() {
                   <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider bg-amber-600 text-white rounded-full">
                     Fallback Provider
                   </span>
-                  <span className="text-xs font-bold text-slate-900">OmniRoute</span>
+                  <span className="text-xs font-bold text-slate-900">OpenRouter</span>
                 </div>
                 <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-full border border-sky-200">
                   <CheckCircle2 className="w-3 h-3 text-sky-600" />
@@ -178,7 +178,7 @@ export default function SettingsPage() {
                 Unified model gateway automatically engaged if Gemini reaches rate limits (429), timeouts, or upstream network interruptions.
               </p>
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
-                <span>Model: <code className="text-amber-800 font-mono font-medium">{aiConfig?.fallback_model || 'gpt-4o'}</code></span>
+                <span>Model: <code className="text-amber-800 font-mono font-medium">{aiConfig?.fallback_model || 'google/gemini-flash-1.5'}</code></span>
                 <span>Role: Automatic Fallback</span>
               </div>
             </div>
@@ -189,7 +189,7 @@ export default function SettingsPage() {
             <div className="flex items-center gap-2 text-slate-700">
               <span className="font-bold text-slate-900">Routing Policy:</span>
               <span className="font-mono text-sky-700 font-semibold bg-sky-50 px-2 py-0.5 rounded border border-sky-200">
-                Gemini &rarr; OmniRoute
+                Gemini &rarr; OpenRouter
               </span>
               <span className="text-slate-500 text-[11px]">Automatic failover. No manual switching required.</span>
             </div>

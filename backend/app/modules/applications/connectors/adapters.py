@@ -62,10 +62,16 @@ _CONNECTORS: Dict[str, ApplicationConnector] = {
     "unstop": ReadOnlyDiscoveryAdapter("Unstop", "unstop", "EXTERNAL_APPLICATION_REQUIRED"),
     "internshala": ReadOnlyDiscoveryAdapter("Internshala", "internshala", "EXTERNAL_APPLICATION_REQUIRED"),
     "wellfound": ReadOnlyDiscoveryAdapter("Wellfound", "wellfound", "EXTERNAL_APPLICATION_REQUIRED"),
+    "career_pages": ReadOnlyDiscoveryAdapter("Company Careers", "career_pages", "EXTERNAL_APPLICATION_REQUIRED"),
+    "authorized_api": ReadOnlyDiscoveryAdapter("Authorized Partner API", "authorized_api", "EXTERNAL_APPLICATION_REQUIRED"),
 }
 
 def get_application_connector(source_slug: Optional[str] = None) -> ApplicationConnector:
-    """Returns the application connector for a given source slug, defaulting to MockApplicationConnector if unspecified."""
+    """Returns the application connector for a given source slug, defaulting to safe ReadOnlyDiscoveryAdapter if unspecified."""
     if not source_slug:
-        return _CONNECTORS["mock_ats"]
-    return _CONNECTORS.get(source_slug.lower(), _CONNECTORS["mock_ats"])
+        return _CONNECTORS.get("career_pages")
+    normalized_slug = source_slug.lower().strip()
+    return _CONNECTORS.get(
+        normalized_slug,
+        ReadOnlyDiscoveryAdapter(normalized_slug.title(), normalized_slug, "EXTERNAL_APPLICATION_REQUIRED")
+    )

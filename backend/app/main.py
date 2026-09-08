@@ -36,8 +36,23 @@ async def lifespan(app: FastAPI):
     logger.info("Initializing database schema...")
     await init_db()
     logger.info("Database schema initialized.")
+
+    # Phase 1: Start background worker daemon (processes application queue & 10:00 AM IST daily routine)
+    import asyncio
+    from worker import ProductionWorker
+    worker = ProductionWorker(poll_interval=15, batch_size=5)
+    worker_task = asyncio.create_task(worker.start())
+    logger.info("Autonomous Background Worker daemon started.")
+
     yield
-    logger.info("Shutting down AI Job Assistant service.")
+
+    logger.info("Shutting down AI Job Assistant service...")
+    worker.stop()
+    try:
+        await asyncio.wait_for(worker_task, timeout=5.0)
+    except (asyncio.TimeoutError, asyncio.CancelledError, Exception) as w_err:
+        logger.debug(f"Worker shutdown note: {w_err}")
+    logger.info("AI Job Assistant service stopped.")
 
 app = FastAPI(
     title=settings.PROJECT_NAME,

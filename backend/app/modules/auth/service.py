@@ -34,25 +34,25 @@ class AuthService:
         self.db.add(user)
         await self.db.flush()
 
-        # Create empty profile and default job preferences
+        # Create clean profile and job preferences awaiting resume upload or user configuration
         profile = UserProfile(
             user_id=user.id,
-            headline="Full Stack Software Engineer",
-            summary="Passionate engineer building scalable AI-driven web systems.",
-            location="San Francisco, CA",
+            headline=f"Job Seeker Profile - {payload.full_name}",
+            summary=None,
+            location=None,
             remote_preference="REMOTE",
-            years_of_experience=4.0,
-            target_roles=["Senior Backend Engineer", "Full Stack Engineer", "Python Engineer"]
+            years_of_experience=0.0,
+            target_roles=[]
         )
         preferences = JobPreference(
             user_id=user.id,
-            desired_titles=["Senior Backend Engineer", "Full Stack Engineer"],
-            desired_locations=["Remote", "San Francisco, CA", "New York, NY"],
-            remote_types=["REMOTE", "HYBRID"],
-            min_base_salary=140000,
-            max_base_salary=200000,
-            currency="USD",
-            target_industries=["Software", "Fintech", "AI/ML"]
+            desired_titles=[],
+            desired_locations=[],
+            remote_types=["REMOTE", "HYBRID", "ON_SITE"],
+            min_base_salary=None,
+            max_base_salary=None,
+            currency=None,
+            target_industries=[]
         )
         self.db.add(profile)
         self.db.add(preferences)

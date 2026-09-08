@@ -61,8 +61,8 @@ class Settings(BaseSettings):
     # Matching Engine Recommendation Thresholds
     MATCH_STRONG_THRESHOLD: float = 90.0
     MATCH_GOOD_THRESHOLD: float = 80.0
-    MATCH_POSSIBLE_THRESHOLD: float = 70.0
-    MATCH_WEAK_THRESHOLD: float = 60.0
+    MATCH_POSSIBLE_THRESHOLD: float = 65.0
+    MATCH_WEAK_THRESHOLD: float = 55.0
 
     # Mailbox OAuth Integration (Phase 7)
     GOOGLE_CLIENT_ID: Optional[str] = None
@@ -122,6 +122,19 @@ class Settings(BaseSettings):
 
     # Auto-Apply Quotas & Concurrency (None = true unlimited applications)
     AUTO_APPLY_DAILY_LIMIT: Optional[int] = None
+
+    # Phase 2: Live Job Discovery Providers Configuration
+    DISCOVERY_TIMEOUT_SECONDS: int = 15
+    DISCOVERY_MAX_RETRIES: int = 2
+    GREENHOUSE_BOARDS: str = "cloudflare,figma,stripe,reddit,coinbase,datadog,dropbox,elastic"
+    LEVER_COMPANIES: str = "spotify,palantir,outreach,coupa,kinsta"
+    JSEARCH_API_KEY: Optional[str] = None
+    JSEARCH_BASE_URL: str = "https://jsearch.p.rapidapi.com"
+    SERPAPI_KEY: Optional[str] = None
+    ADZUNA_APP_ID: Optional[str] = None
+    ADZUNA_APP_KEY: Optional[str] = None
+    PUBLIC_FEEDS_ENABLED: bool = True
+    DISCOVERY_FALLBACK_TO_TEST_CATALOG: bool = False  # Strictly False in production
 
     model_config = SettingsConfigDict(
         env_file=".env",

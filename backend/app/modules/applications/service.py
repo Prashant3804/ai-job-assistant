@@ -59,7 +59,7 @@ class ApplicationService:
                 id=uuid.uuid4(),
                 user_id=user_id,
                 auto_apply_enabled=False,
-                minimum_match_score=85.0,
+                minimum_match_score=65.0,
                 daily_application_limit=None,
                 per_source_daily_limit=None,
                 duplicate_protection=True,

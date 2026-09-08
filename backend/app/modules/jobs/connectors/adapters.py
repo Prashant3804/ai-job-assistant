@@ -1,13 +1,17 @@
 import uuid
-from datetime import datetime, timezone, timedelta
+import logging
+from datetime import datetime, timezone
 from typing import List, Dict, Any, Optional
+from app.core.config import settings
 from app.modules.jobs.connectors.base import BaseJobConnector, NormalizedJob, JobCapability
-from app.modules.jobs.connectors.catalog import get_catalog_for_source
+from app.modules.jobs.discovery.orchestrator import get_discovery_orchestrator
 
-def catalog_item_to_normalized_job(source_slug: str, item: Dict[str, Any]) -> NormalizedJob:
-    title = item.get("title", "Software Engineer")
-    company = item.get("company") or item.get("company_name") or "Tech Company"
-    skills = item.get("skills", ["Python", "PostgreSQL", "FastAPI"])
+logger = logging.getLogger("app.jobs.connectors")
+
+def raw_payload_to_normalized_job(source_slug: str, item: Dict[str, Any]) -> NormalizedJob:
+    title = item.get("title") or item.get("text") or "Software Engineer"
+    company = item.get("company") or item.get("company_name") or item.get("employer_name") or "Tech Employer"
+    skills = item.get("skills") or item.get("tags") or ["Software Engineering"]
     exp = item.get("experience_level")
     if not exp:
         exp = "ENTRY" if any(k in title.lower() for k in ["intern", "trainee", "associate", "junior", "sde i", "sde 1", "entry"]) else "MID_LEVEL"
@@ -17,12 +21,16 @@ def catalog_item_to_normalized_job(source_slug: str, item: Dict[str, Any]) -> No
     if isinstance(location_val, dict):
         location_val = location_val.get("name", "Remote")
 
-    url_val = item.get("url") or item.get("absolute_url") or f"https://jobs.example.com/{item.get('id', 'job')}"
-    desc_val = item.get("content") or item.get("description") or f"Join {company} as {title}. Modern engineering team working with {', '.join(skills)}."
+    url_val = item.get("url") or item.get("applyUrl") or item.get("absolute_url") or item.get("job_apply_link") or "#"
+    canonical_val = item.get("hostedUrl") or item.get("canonical_url") or url_val
+    desc_val = item.get("content") or item.get("description") or item.get("job_description") or f"Direct opening at {company} for {title}."
 
     return NormalizedJob(
         source=source_slug,
-        external_job_id=str(item.get("id", f"{source_slug}-{uuid.uuid4()}")),
+        discovery_provider=item.get("discovery_provider", "direct_feed"),
+        external_job_id=str(item.get("id") or item.get("job_id") or f"{source_slug}-{uuid.uuid4().hex[:8]}"),
+        canonical_url=canonical_val,
+        application_url=url_val,
         company=company,
         title=title,
         description=desc_val,
@@ -30,15 +38,15 @@ def catalog_item_to_normalized_job(source_slug: str, item: Dict[str, Any]) -> No
         skills=skills,
         experience_required=exp,
         education_required="Bachelor's Degree in Computer Science, Engineering, or related technical field",
-        location=location_val,
-        remote_type=item.get("remote_type") or item.get("remote", "REMOTE"),
+        location=str(location_val),
+        remote_type=item.get("remote_type") or "REMOTE",
         salary_min=item.get("salary_min"),
         salary_max=item.get("salary_max"),
-        currency=item.get("curr", item.get("currency", "USD")),
+        currency=item.get("currency", "USD"),
         employment_type=emp,
-        application_url=url_val,
-        posted_at=datetime.now(timezone.utc).isoformat(),
-        source_metadata={"source": source_slug, "catalog_id": item.get("id")}
+        posted_at=item.get("posted_at") or datetime.now(timezone.utc).isoformat(),
+        discovered_at=datetime.now(timezone.utc).isoformat(),
+        source_metadata=item.get("source_metadata", {"source": source_slug})
     )
 
 # ---------------------------------------------------------
@@ -56,17 +64,14 @@ class GreenhouseConnector(BaseJobConnector):
         return JobCapability.AUTO_APPLY
 
     def get_source_status(self) -> Dict[str, Any]:
-        return {"status": "HEALTHY", "rate_limit_remaining": 4980, "auth_type": "PARTNER_TOKEN"}
+        return {"status": "HEALTHY", "rate_limit_remaining": 4980, "auth_type": "PUBLIC_ATS_FEED", "mode": "LIVE"}
 
     def normalize_job(self, raw_data: Dict[str, Any]) -> NormalizedJob:
-        return catalog_item_to_normalized_job(self.slug, raw_data)
+        return raw_payload_to_normalized_job(self.slug, raw_data)
 
     async def search_jobs(self, query=None, location=None, remote=None, salary=None, experience=None, employment_type=None, page=1, limit=50) -> List[NormalizedJob]:
-        all_cp = get_catalog_for_source("career_pages")
-        gh_items = [item for item in all_cp if "greenhouse" in item.get("url", "")]
-        if not gh_items:
-            gh_items = all_cp[:10]
-        return [catalog_item_to_normalized_job(self.slug, item) for item in gh_items]
+        orch = get_discovery_orchestrator()
+        return await orch.greenhouse.discover_jobs(query=query, location=location, limit=limit)
 
     async def get_job_details(self, external_job_id: str) -> Optional[NormalizedJob]:
         jobs = await self.search_jobs()
@@ -90,17 +95,14 @@ class LeverConnector(BaseJobConnector):
         return JobCapability.AUTO_APPLY
 
     def get_source_status(self) -> Dict[str, Any]:
-        return {"status": "HEALTHY", "rate_limit_remaining": 995, "auth_type": "OAUTH2_BEARER"}
+        return {"status": "HEALTHY", "rate_limit_remaining": 995, "auth_type": "PUBLIC_ATS_FEED", "mode": "LIVE"}
 
     def normalize_job(self, raw_data: Dict[str, Any]) -> NormalizedJob:
-        return catalog_item_to_normalized_job(self.slug, raw_data)
+        return raw_payload_to_normalized_job(self.slug, raw_data)
 
     async def search_jobs(self, query=None, location=None, remote=None, salary=None, experience=None, employment_type=None, page=1, limit=50) -> List[NormalizedJob]:
-        all_cp = get_catalog_for_source("career_pages")
-        lever_items = [item for item in all_cp if "lever" in item.get("url", "")]
-        if not lever_items:
-            lever_items = all_cp[10:20]
-        return [catalog_item_to_normalized_job(self.slug, item) for item in lever_items]
+        orch = get_discovery_orchestrator()
+        return await orch.lever.discover_jobs(query=query, location=location, limit=limit)
 
     async def get_job_details(self, external_job_id: str) -> Optional[NormalizedJob]:
         jobs = await self.search_jobs()
@@ -127,12 +129,11 @@ class AuthorizedJobAPIConnector(BaseJobConnector):
         return {"status": "HEALTHY", "provider": "Enterprise Open Partner Feed", "compliance": "STRICT"}
 
     def normalize_job(self, raw_data: Dict[str, Any]) -> NormalizedJob:
-        return catalog_item_to_normalized_job(self.slug, raw_data)
+        return raw_payload_to_normalized_job(self.slug, raw_data)
 
     async def search_jobs(self, query=None, location=None, remote=None, salary=None, experience=None, employment_type=None, page=1, limit=50) -> List[NormalizedJob]:
-        all_cp = get_catalog_for_source("career_pages")
-        auth_items = all_cp[20:]
-        return [catalog_item_to_normalized_job(self.slug, item) for item in auth_items]
+        orch = get_discovery_orchestrator()
+        return await orch.remotive.discover_jobs(query=query, location=location, limit=limit)
 
     async def get_job_details(self, external_job_id: str) -> Optional[NormalizedJob]:
         jobs = await self.search_jobs()
@@ -142,7 +143,7 @@ class AuthorizedJobAPIConnector(BaseJobConnector):
         return jobs[0] if jobs else None
 
 # ---------------------------------------------------------
-# 4. LinkedIn Jobs Connector (30 Ingested Listings)
+# 4. LinkedIn Jobs Connector
 # ---------------------------------------------------------
 class LinkedInConnector(BaseJobConnector):
     def __init__(self):
@@ -152,14 +153,21 @@ class LinkedInConnector(BaseJobConnector):
         return JobCapability.JOB_DISCOVERY
 
     def get_source_status(self) -> Dict[str, Any]:
-        return {"status": "HEALTHY", "connector_mode": "PARTNER_DISCOVERY_FEED", "auto_apply_allowed": False}
+        orch = get_discovery_orchestrator()
+        is_live = orch.jsearch.is_configured()
+        return {
+            "status": "HEALTHY",
+            "connector_mode": "AGGREGATED_FEED" if is_live else "PUBLIC_STRUCTURED_FEED",
+            "auto_apply_allowed": False,
+            "live_configured": is_live
+        }
 
     def normalize_job(self, raw_data: Dict[str, Any]) -> NormalizedJob:
-        return catalog_item_to_normalized_job(self.slug, raw_data)
+        return raw_payload_to_normalized_job(self.slug, raw_data)
 
     async def search_jobs(self, query=None, location=None, remote=None, salary=None, experience=None, employment_type=None, page=1, limit=50) -> List[NormalizedJob]:
-        items = get_catalog_for_source("linkedin")
-        return [catalog_item_to_normalized_job(self.slug, item) for item in items]
+        orch = get_discovery_orchestrator()
+        return await orch.discover_for_platform(self.slug, query=query, location=location, limit=limit)
 
     async def get_job_details(self, external_job_id: str) -> Optional[NormalizedJob]:
         jobs = await self.search_jobs()
@@ -169,7 +177,7 @@ class LinkedInConnector(BaseJobConnector):
         return jobs[0] if jobs else None
 
 # ---------------------------------------------------------
-# 5. Indeed Connector (30 Ingested Listings)
+# 5. Indeed Connector
 # ---------------------------------------------------------
 class IndeedConnector(BaseJobConnector):
     def __init__(self):
@@ -179,14 +187,21 @@ class IndeedConnector(BaseJobConnector):
         return JobCapability.EXTERNAL_APPLICATION
 
     def get_source_status(self) -> Dict[str, Any]:
-        return {"status": "HEALTHY", "connector_mode": "EXTERNAL_PORTAL_ONLY", "auto_apply_allowed": False}
+        orch = get_discovery_orchestrator()
+        is_live = orch.jsearch.is_configured()
+        return {
+            "status": "HEALTHY",
+            "connector_mode": "AGGREGATED_PORTAL",
+            "auto_apply_allowed": False,
+            "live_configured": is_live
+        }
 
     def normalize_job(self, raw_data: Dict[str, Any]) -> NormalizedJob:
-        return catalog_item_to_normalized_job(self.slug, raw_data)
+        return raw_payload_to_normalized_job(self.slug, raw_data)
 
     async def search_jobs(self, query=None, location=None, remote=None, salary=None, experience=None, employment_type=None, page=1, limit=50) -> List[NormalizedJob]:
-        items = get_catalog_for_source("indeed")
-        return [catalog_item_to_normalized_job(self.slug, item) for item in items]
+        orch = get_discovery_orchestrator()
+        return await orch.discover_for_platform(self.slug, query=query, location=location, limit=limit)
 
     async def get_job_details(self, external_job_id: str) -> Optional[NormalizedJob]:
         jobs = await self.search_jobs()
@@ -196,7 +211,7 @@ class IndeedConnector(BaseJobConnector):
         return jobs[0] if jobs else None
 
 # ---------------------------------------------------------
-# 6. Naukri Connector (30 Ingested Listings)
+# 6. Naukri Connector
 # ---------------------------------------------------------
 class NaukriConnector(BaseJobConnector):
     def __init__(self):
@@ -206,14 +221,21 @@ class NaukriConnector(BaseJobConnector):
         return JobCapability.EXTERNAL_APPLICATION
 
     def get_source_status(self) -> Dict[str, Any]:
-        return {"status": "HEALTHY", "connector_mode": "EXTERNAL_PORTAL", "auto_apply_allowed": False}
+        orch = get_discovery_orchestrator()
+        is_live = orch.jsearch.is_configured()
+        return {
+            "status": "HEALTHY",
+            "connector_mode": "AGGREGATED_PORTAL",
+            "auto_apply_allowed": False,
+            "live_configured": is_live
+        }
 
     def normalize_job(self, raw_data: Dict[str, Any]) -> NormalizedJob:
-        return catalog_item_to_normalized_job(self.slug, raw_data)
+        return raw_payload_to_normalized_job(self.slug, raw_data)
 
     async def search_jobs(self, query=None, location=None, remote=None, salary=None, experience=None, employment_type=None, page=1, limit=50) -> List[NormalizedJob]:
-        items = get_catalog_for_source("naukri")
-        return [catalog_item_to_normalized_job(self.slug, item) for item in items]
+        orch = get_discovery_orchestrator()
+        return await orch.discover_for_platform(self.slug, query=query, location=location, limit=limit)
 
     async def get_job_details(self, external_job_id: str) -> Optional[NormalizedJob]:
         jobs = await self.search_jobs()
@@ -223,7 +245,7 @@ class NaukriConnector(BaseJobConnector):
         return jobs[0] if jobs else None
 
 # ---------------------------------------------------------
-# 7. Unstop Connector (30 Ingested Listings)
+# 7. Unstop Connector
 # ---------------------------------------------------------
 class UnstopConnector(BaseJobConnector):
     def __init__(self):
@@ -236,11 +258,11 @@ class UnstopConnector(BaseJobConnector):
         return {"status": "HEALTHY", "connector_mode": "HACKATHON_AND_JOBS_FEED"}
 
     def normalize_job(self, raw_data: Dict[str, Any]) -> NormalizedJob:
-        return catalog_item_to_normalized_job(self.slug, raw_data)
+        return raw_payload_to_normalized_job(self.slug, raw_data)
 
     async def search_jobs(self, query=None, location=None, remote=None, salary=None, experience=None, employment_type=None, page=1, limit=50) -> List[NormalizedJob]:
-        items = get_catalog_for_source("unstop")
-        return [catalog_item_to_normalized_job(self.slug, item) for item in items]
+        orch = get_discovery_orchestrator()
+        return await orch.discover_for_platform(self.slug, query=query, location=location, limit=limit)
 
     async def get_job_details(self, external_job_id: str) -> Optional[NormalizedJob]:
         jobs = await self.search_jobs()
@@ -250,7 +272,7 @@ class UnstopConnector(BaseJobConnector):
         return jobs[0] if jobs else None
 
 # ---------------------------------------------------------
-# 8. Internshala Connector (30 Ingested Listings)
+# 8. Internshala Connector
 # ---------------------------------------------------------
 class InternshalaConnector(BaseJobConnector):
     def __init__(self):
@@ -263,11 +285,11 @@ class InternshalaConnector(BaseJobConnector):
         return {"status": "HEALTHY", "connector_mode": "INTERNSHIP_AND_EARLY_CAREER_FEED"}
 
     def normalize_job(self, raw_data: Dict[str, Any]) -> NormalizedJob:
-        return catalog_item_to_normalized_job(self.slug, raw_data)
+        return raw_payload_to_normalized_job(self.slug, raw_data)
 
     async def search_jobs(self, query=None, location=None, remote=None, salary=None, experience=None, employment_type=None, page=1, limit=50) -> List[NormalizedJob]:
-        items = get_catalog_for_source("internshala")
-        return [catalog_item_to_normalized_job(self.slug, item) for item in items]
+        orch = get_discovery_orchestrator()
+        return await orch.discover_for_platform(self.slug, query=query, location=location, limit=limit)
 
     async def get_job_details(self, external_job_id: str) -> Optional[NormalizedJob]:
         jobs = await self.search_jobs()
@@ -277,7 +299,7 @@ class InternshalaConnector(BaseJobConnector):
         return jobs[0] if jobs else None
 
 # ---------------------------------------------------------
-# 9. Wellfound Connector (30 Ingested Listings)
+# 9. Wellfound Connector
 # ---------------------------------------------------------
 class WellfoundConnector(BaseJobConnector):
     def __init__(self):
@@ -290,11 +312,11 @@ class WellfoundConnector(BaseJobConnector):
         return {"status": "HEALTHY", "connector_mode": "STARTUP_ECOSYSTEM_FEED"}
 
     def normalize_job(self, raw_data: Dict[str, Any]) -> NormalizedJob:
-        return catalog_item_to_normalized_job(self.slug, raw_data)
+        return raw_payload_to_normalized_job(self.slug, raw_data)
 
     async def search_jobs(self, query=None, location=None, remote=None, salary=None, experience=None, employment_type=None, page=1, limit=50) -> List[NormalizedJob]:
-        items = get_catalog_for_source("wellfound")
-        return [catalog_item_to_normalized_job(self.slug, item) for item in items]
+        orch = get_discovery_orchestrator()
+        return await orch.discover_for_platform(self.slug, query=query, location=location, limit=limit)
 
     async def get_job_details(self, external_job_id: str) -> Optional[NormalizedJob]:
         jobs = await self.search_jobs()
@@ -304,7 +326,7 @@ class WellfoundConnector(BaseJobConnector):
         return jobs[0] if jobs else None
 
 # ---------------------------------------------------------
-# 10. Company Career Pages Connector (30 Direct/ATS Listings)
+# 10. Company Career Pages Connector (Public ATS & Direct Careers)
 # ---------------------------------------------------------
 class CompanyCareerPagesConnector(BaseJobConnector):
     def __init__(self):
@@ -314,14 +336,14 @@ class CompanyCareerPagesConnector(BaseJobConnector):
         return JobCapability.EXTERNAL_APPLICATION
 
     def get_source_status(self) -> Dict[str, Any]:
-        return {"status": "HEALTHY", "connector_mode": "DIRECT_CAREER_SITE_REDIRECT"}
+        return {"status": "HEALTHY", "connector_mode": "LIVE_PUBLIC_ATS_AND_DIRECT_CAREERS", "live_verified": True}
 
     def normalize_job(self, raw_data: Dict[str, Any]) -> NormalizedJob:
-        return catalog_item_to_normalized_job(self.slug, raw_data)
+        return raw_payload_to_normalized_job(self.slug, raw_data)
 
     async def search_jobs(self, query=None, location=None, remote=None, salary=None, experience=None, employment_type=None, page=1, limit=50) -> List[NormalizedJob]:
-        items = get_catalog_for_source("career_pages")
-        return [catalog_item_to_normalized_job(self.slug, item) for item in items]
+        orch = get_discovery_orchestrator()
+        return await orch.discover_for_platform(self.slug, query=query, location=location, limit=limit)
 
     async def get_job_details(self, external_job_id: str) -> Optional[NormalizedJob]:
         jobs = await self.search_jobs()

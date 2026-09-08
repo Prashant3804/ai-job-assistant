@@ -41,6 +41,22 @@ class MockAIProvider(BaseLLMService):
                 "Based on the analysis, this role has an 88% overall match. Your backend experience with FastAPI and PostgreSQL "
                 "aligns closely with the senior requirements. The primary gap is Kubernetes cluster management."
             )
+        elif "cover letter" in lower or "cover_letter" in lower:
+            # Extract candidate name if present in prompt
+            name_match = re.search(r"-\s*Name:\s*([^\n]+)", prompt)
+            cand_name = name_match.group(1).strip() if name_match else "Candidate"
+            comp_match = re.search(r"-\s*Company:\s*([^\n]+)", prompt)
+            comp_name = comp_match.group(1).strip() if comp_match else "Employer"
+            title_match = re.search(r"-\s*Job Title:\s*([^\n]+)", prompt)
+            job_title = title_match.group(1).strip() if title_match else "Software Engineer"
+
+            return (
+                f"Dear Hiring Team at {comp_name},\n\n"
+                f"I am writing to express my strong interest in the {job_title} position. "
+                f"With hands-on experience and technical background aligning with your requirements, "
+                f"I am eager to contribute to your engineering team's goals.\n\n"
+                f"Sincerely,\n{cand_name}"
+            )
         elif "email" in lower or "draft" in lower:
             return (
                 "Dear Hiring Team,\n\n"
@@ -275,6 +291,24 @@ class GeminiProvider(BaseLLMService):
         parsed = json.loads(clean_json)
         return response_model.model_validate(parsed)
 
+    async def generate_embedding(self, text: str) -> List[float]:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key={self.api_key}"
+        payload = {
+            "model": "models/text-embedding-004",
+            "content": {"parts": [{"text": text[:2000]}]}
+        }
+        try:
+            async with httpx.AsyncClient(timeout=15.0) as client:
+                res = await client.post(url, json=payload)
+                if res.status_code == 200:
+                    data = res.json()
+                    values = data.get("embedding", {}).get("values", [])
+                    if values:
+                        return values
+        except Exception as e:
+            logger.warning(f"Gemini embedding API call failed: {e}. Using deterministic fallback.")
+        return [float(ord(c) % 10) / 10.0 for c in (text[:1536] + "x" * 1536)[:1536]]
+
 class AIServiceException(Exception):
     """Raised when all configured resilient AI providers fail."""
     pass
@@ -349,9 +383,11 @@ class ResilientAIService(BaseLLMService):
 
     def __init__(self):
         self.gemini_key = settings.GEMINI_API_KEY
-        self.omniroute_key = settings.OMNIROUTE_API_KEY
+        self.omniroute_key = getattr(settings, "OPENROUTER_API_KEY", None) or getattr(settings, "OMNIROUTE_API_KEY", None)
         self.gemini = GeminiProvider(self.gemini_key) if self.gemini_key else None
-        self.omniroute = OmniRouteProvider(settings.OMNIROUTE_BASE_URL, self.omniroute_key, settings.OMNIROUTE_CHAT_MODEL) if self.omniroute_key else None
+        fallback_base = getattr(settings, "OPENROUTER_BASE_URL", None) if getattr(settings, "OPENROUTER_API_KEY", None) else getattr(settings, "OMNIROUTE_BASE_URL", "http://localhost:20128/v1")
+        fallback_model = getattr(settings, "OPENROUTER_MODEL", None) if getattr(settings, "OPENROUTER_API_KEY", None) else getattr(settings, "OMNIROUTE_CHAT_MODEL", "gpt-4o")
+        self.omniroute = OmniRouteProvider(fallback_base, self.omniroute_key, fallback_model) if self.omniroute_key else None
         self.mock = MockAIProvider()
         self.last_provider_used = "mock" if (not self.gemini_key and not self.omniroute_key) else ("gemini" if self.gemini_key else "omniroute")
         self.last_fallback_occurred = False
@@ -361,7 +397,8 @@ class ResilientAIService(BaseLLMService):
         gemini_configured = bool(self.gemini_key)
         omniroute_configured = bool(self.omniroute_key)
         active_provider = "gemini" if not self.last_fallback_occurred else "omniroute"
-        active_display = "Gemini (Primary)" if not self.last_fallback_occurred else "OmniRoute (Fallback Active)"
+        fallback_label = "OpenRouter" if getattr(settings, "OPENROUTER_API_KEY", None) else "OmniRoute"
+        active_display = "Gemini (Primary)" if not self.last_fallback_occurred else f"{fallback_label} (Fallback Active)"
 
         return {
             "primary_provider": "gemini",
@@ -474,11 +511,17 @@ class ResilientAIService(BaseLLMService):
         raise AIServiceException("No AI providers are configured.")
 
     async def generate_embedding(self, text: str) -> List[float]:
-        if self.omniroute:
-            try:
-                return await self.omniroute.generate_embedding(text)
-            except Exception:
-                pass
+        if settings.ENVIRONMENT not in ["test", "testing"]:
+            if self.gemini:
+                try:
+                    return await self.gemini.generate_embedding(text)
+                except Exception:
+                    pass
+            if self.omniroute:
+                try:
+                    return await self.omniroute.generate_embedding(text)
+                except Exception:
+                    pass
         return await self.mock.generate_embedding(text)
 
 

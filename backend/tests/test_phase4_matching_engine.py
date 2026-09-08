@@ -509,7 +509,8 @@ def test_threshold_validation():
     assert scorer.determine_recommendation(95.0) == RecommendationStatus.STRONG_MATCH
     assert scorer.determine_recommendation(85.0) == RecommendationStatus.GOOD_MATCH
     assert scorer.determine_recommendation(75.0) == RecommendationStatus.POSSIBLE_MATCH
-    assert scorer.determine_recommendation(65.0) == RecommendationStatus.WEAK_MATCH
+    assert scorer.determine_recommendation(65.0) == RecommendationStatus.POSSIBLE_MATCH
+    assert scorer.determine_recommendation(55.0) == RecommendationStatus.WEAK_MATCH
     assert scorer.determine_recommendation(45.0) == RecommendationStatus.NOT_RECOMMENDED
 
 # ----------------- 38. Unauthorized Match Access -----------------

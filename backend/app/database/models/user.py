@@ -144,7 +144,7 @@ class JobPreference(Base, TimestampMixin):
     experience_min_years: Mapped[Optional[float]] = mapped_column(Float, default=0.0, nullable=True)
     experience_max_years: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
     job_freshness_days: Mapped[int] = mapped_column(Integer, default=30, nullable=False)
-    minimum_match_score: Mapped[float] = mapped_column(Float, default=70.0, nullable=False)
+    minimum_match_score: Mapped[float] = mapped_column(Float, default=65.0, nullable=False)
     target_industries: Mapped[Optional[list]] = mapped_column(JSON, default=list, nullable=True)
     sponsorship_required: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 

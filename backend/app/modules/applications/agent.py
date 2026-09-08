@@ -124,7 +124,9 @@ class ApplicationAgent:
             return {"success": False, "status": app.status, "reason": policy_reason}
 
         # 3. Check Platform Capability
-        cap_supported, cap_status, cap_reason = PlatformCapabilityManager.check_capability(job)
+        from app.modules.applications.capability_service import ApplicationCapabilityService, ApplicationSubmissionCapability
+        cap_status, cap_reason = ApplicationCapabilityService.evaluate_job(job)
+        cap_supported = (cap_status == ApplicationSubmissionCapability.SUPPORTED_AUTO_APPLY)
         if not cap_supported:
             app.status = ApplicationStatus.AUTO_APPLY_UNSUPPORTED.value
             app.failure_reason = cap_reason

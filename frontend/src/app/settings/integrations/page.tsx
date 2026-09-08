@@ -265,7 +265,7 @@ export default function IntegrationsPage() {
           </div>
 
           <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm">
-            <h3 className="text-base font-bold text-gray-900 mb-4">OmniRoute AI Gateway Health</h3>
+            <h3 className="text-base font-bold text-gray-900 mb-4">AI Gateway Health</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               <div className="p-4 bg-gray-50 rounded-lg">
                 <span className="text-gray-500 text-xs">Provider:</span>

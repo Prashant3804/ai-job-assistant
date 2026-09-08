@@ -32,10 +32,10 @@ export default function AISettingsPage() {
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [geminiModel, setGeminiModel] = useState('gemini-1.5-flash');
 
-  // OmniRoute Fallback States
-  const [omnirouteBaseUrl, setOmnirouteBaseUrl] = useState('http://localhost:20128/v1');
+  // OpenRouter Fallback States
+  const [omnirouteBaseUrl, setOmnirouteBaseUrl] = useState('https://openrouter.ai/api/v1');
   const [omnirouteApiKey, setOmnirouteApiKey] = useState('');
-  const [omnirouteModel, setOmnirouteModel] = useState('gpt-4o');
+  const [omnirouteModel, setOmnirouteModel] = useState('google/gemini-flash-1.5');
 
   // Gateway Controls
   const [timeoutSec, setTimeoutSec] = useState(30);
@@ -277,7 +277,7 @@ export default function AISettingsPage() {
                   : 'bg-amber-500/10 border-amber-500/30 text-amber-200'
               }`}>
                 <div className="flex items-center justify-between font-bold">
-                  <span>Fallback: OmniRoute</span>
+                  <span>Fallback: OpenRouter</span>
                   <span>{testResult.omniroute_status || 'TESTED'}</span>
                 </div>
                 <div className="text-[11px] opacity-90">{testResult.omniroute_message || 'Verification complete'}</div>
@@ -328,53 +328,53 @@ export default function AISettingsPage() {
           </div>
         </div>
 
-        {/* SECTION 2: OmniRoute (Automatic Fallback) Configuration */}
+        {/* SECTION 2: OpenRouter (Automatic Fallback) Configuration */}
         <div className="bg-slate-900/80 border border-slate-800 rounded-2xl p-6 shadow-xl space-y-4">
           <div className="flex items-center gap-2 border-b border-slate-800 pb-3">
             <Server className="w-5 h-5 text-amber-400" />
             <div>
-              <h3 className="font-bold text-white text-base">Fallback Provider: OmniRoute</h3>
-              <p className="text-xs text-slate-400">Configure OmniRoute endpoint, key, and default model for seamless fallback.</p>
+              <h3 className="font-bold text-white text-base">Fallback Provider: OpenRouter</h3>
+              <p className="text-xs text-slate-400">Configure OpenRouter endpoint, key, and default model for seamless fallback.</p>
             </div>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="text-xs font-medium text-slate-300 block mb-1">OmniRoute Base URL</label>
+              <label className="text-xs font-medium text-slate-300 block mb-1">OpenRouter Base URL</label>
               <input
                 type="text"
                 value={omnirouteBaseUrl}
                 onChange={(e) => setOmnirouteBaseUrl(e.target.value)}
-                placeholder="http://localhost:20128/v1"
+                placeholder="https://openrouter.ai/api/v1"
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder:text-slate-500"
               />
-              <span className="text-[10px] text-slate-500 mt-1 block">Base URL of the OmniRoute gateway.</span>
+              <span className="text-[10px] text-slate-500 mt-1 block">Base URL of the OpenRouter gateway.</span>
             </div>
 
             <div>
               <label className="text-xs font-medium text-slate-300 block mb-1">
-                OmniRoute API Key {config?.omniroute_api_key_masked ? `(${config.omniroute_api_key_masked})` : ''}
+                OpenRouter API Key {config?.omniroute_api_key_masked ? `(${config.omniroute_api_key_masked})` : ''}
               </label>
               <input
                 type="password"
                 value={omnirouteApiKey}
                 onChange={(e) => setOmnirouteApiKey(e.target.value)}
-                placeholder={config?.fallback_configured ? '•••••••••••••••• (Configured ✓)' : 'Enter OmniRoute API Key...'}
+                placeholder={config?.fallback_configured ? '•••••••••••••••• (Configured ✓)' : 'Enter OpenRouter API Key...'}
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white font-mono placeholder:text-slate-500"
               />
               <span className="text-[10px] text-slate-500 mt-1 block">Leave empty to keep existing key.</span>
             </div>
 
             <div>
-              <label className="text-xs font-medium text-slate-300 block mb-1">OmniRoute Chat Model</label>
+              <label className="text-xs font-medium text-slate-300 block mb-1">OpenRouter Model</label>
               <input
                 type="text"
                 value={omnirouteModel}
                 onChange={(e) => setOmnirouteModel(e.target.value)}
-                placeholder="gpt-4o"
+                placeholder="google/gemini-flash-1.5"
                 className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-sm text-white"
               />
-              <span className="text-[10px] text-slate-500 mt-1 block">Model routed through OmniRoute fallback.</span>
+              <span className="text-[10px] text-slate-500 mt-1 block">Model routed through OpenRouter fallback.</span>
             </div>
           </div>
         </div>

@@ -53,7 +53,7 @@ async def get_job_preferences(
             remote_types=["REMOTE", "HYBRID"],
             employment_types=["FULL_TIME"],
             currency="USD",
-            minimum_match_score=70.0
+            minimum_match_score=65.0
         )
         db.add(pref)
         await db.commit()
@@ -113,7 +113,7 @@ async def get_auto_apply_policy(
             id=uuid.uuid4(),
             user_id=current_user.id,
             auto_apply_enabled=False,
-            minimum_match_score=85.0,
+            minimum_match_score=65.0,
             daily_application_limit=None,
             per_source_daily_limit=None,
             per_company_limit=3,

@@ -56,7 +56,7 @@ class ApplicationPolicy(Base, TimestampMixin):
     user_id: Mapped[uuid.UUID] = mapped_column(GUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True, index=True)
 
     auto_apply_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    minimum_match_score: Mapped[float] = mapped_column(Float, default=85.0, nullable=False)
+    minimum_match_score: Mapped[float] = mapped_column(Float, default=65.0, nullable=False)
     minimum_salary: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     maximum_experience: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
 
@@ -86,7 +86,7 @@ class ApplicationPolicy(Base, TimestampMixin):
         if "per_source_daily_limit" not in kw:
             kw["per_source_daily_limit"] = 30
         kw.setdefault("auto_apply_enabled", False)
-        kw.setdefault("minimum_match_score", 85.0)
+        kw.setdefault("minimum_match_score", 65.0)
         kw.setdefault("allow_remote", True)
         kw.setdefault("allow_hybrid", True)
         kw.setdefault("allow_onsite", True)

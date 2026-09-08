@@ -27,7 +27,10 @@ class NormalizedJob(BaseModel):
     currency: str = "USD"
     employment_type: str = "FULL_TIME"  # "FULL_TIME", "CONTRACT", "INTERNSHIP", "PART_TIME"
     application_url: str
+    canonical_url: Optional[str] = None
+    discovery_provider: Optional[str] = None
     posted_at: Optional[str] = None
+    discovered_at: Optional[str] = None
     deadline: Optional[str] = None
     source_metadata: Dict[str, Any] = Field(default_factory=dict)
 

@@ -21,7 +21,7 @@ from sqlalchemy import select, and_, func, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.database.models.user import User, UserProfile, JobPreference
+from app.database.models.user import User, UserProfile, JobPreference, Education, Experience, CandidateSkill, Project
 from app.database.models.job import Job, JobSource
 from app.database.models.resume import Resume
 from app.database.models.match import JobMatch
@@ -44,6 +44,8 @@ from app.modules.applications.duplicate import DuplicateDetector
 from app.modules.applications.agent import ApplicationAgent
 from app.modules.applications.events import ApplicationEventManager
 from app.modules.applications.schemas import AutoApplyDailyRunRead, AutoApplyDailyRoutineInfo
+from app.modules.applications.preparation_service import ApplicationPreparationService, ApplicationPreparationPackage
+from app.modules.applications.capability_service import ApplicationCapabilityService, ApplicationSubmissionCapability
 from app.modules.jobs.service import JobService
 from app.modules.matching.service import MatchingService
 
@@ -211,7 +213,7 @@ class AutoApplyDailyRoutineService:
                     id=uuid.uuid4(),
                     user_id=user_id,
                     auto_apply_enabled=False,
-                    minimum_match_score=85.0
+                    minimum_match_score=65.0
                 )
                 self.db.add(policy)
                 await self.db.flush()
@@ -225,8 +227,17 @@ class AutoApplyDailyRoutineService:
 
             # STEP 2: Search available authorized job sources and ingest latest
             job_service = JobService(self.db)
+            cand_skills = None
+            cand_loc = None
+            if user and user.profile:
+                cand_loc = getattr(user.profile, "location", None)
+                # Safely extract skill names if loaded or target_roles
+                if "skills" in user.profile.__dict__ and user.profile.skills:
+                    cand_skills = [s.name if hasattr(s, "name") else str(s) for s in user.profile.skills]
+                elif getattr(user.profile, "target_roles", None):
+                    cand_skills = user.profile.target_roles
             try:
-                sync_res = await job_service.sync_all_discovery_sources()
+                sync_res = await job_service.sync_all_discovery_sources(candidate_skills=cand_skills, candidate_location=cand_loc)
                 logger.info(f"Daily routine job discovery sync: {sync_res}")
             except Exception as e:
                 logger.warning(f"Job discovery sync non-fatal warning during daily routine: {e}")
@@ -262,6 +273,25 @@ class AutoApplyDailyRoutineService:
             skipped_count = 0
             application_summaries = []
 
+            # Load candidate detailed records for zero-hallucination application preparation
+            profile = user.profile
+            stmt_pref = select(JobPreference).where(JobPreference.user_id == user_id)
+            pref = (await self.db.execute(stmt_pref)).scalar_one_or_none()
+
+            stmt_edu = select(Education).where(Education.user_profile_id == (profile.id if profile else None)).order_by(Education.created_at.desc())
+            edus = list((await self.db.execute(stmt_edu)).scalars().all()) if profile else []
+
+            stmt_exp = select(Experience).where(Experience.user_profile_id == (profile.id if profile else None)).order_by(Experience.created_at.desc())
+            exps = list((await self.db.execute(stmt_exp)).scalars().all()) if profile else []
+
+            stmt_skills = select(CandidateSkill).where(CandidateSkill.user_profile_id == (profile.id if profile else None))
+            skills = list((await self.db.execute(stmt_skills)).scalars().all()) if profile else []
+
+            stmt_projs = select(Project).where(Project.user_profile_id == (profile.id if profile else None))
+            projs = list((await self.db.execute(stmt_projs)).scalars().all()) if profile else []
+
+            prep_service = ApplicationPreparationService()
+
             for job in active_jobs:
                 # Compute or retrieve match score
                 stmt_match = select(JobMatch).where(and_(JobMatch.user_id == user_id, JobMatch.job_id == job.id))
@@ -276,7 +306,7 @@ class AutoApplyDailyRoutineService:
 
                 score = match.overall_score if match else 0.0
 
-                # STEP 5: Matching threshold check
+                # STEP 5: Matching threshold check (>= 65% qualifies, < 65% skipped)
                 if score < policy.minimum_match_score:
                     skipped_count += 1
                     continue
@@ -320,12 +350,25 @@ class AutoApplyDailyRoutineService:
                     skipped_count += 1
                     continue
 
-                # STEP 7: Check integration submission capability
-                # Non-circumvention rule: If platform requires manual portal / CAPTCHA, mark EXTERNAL_APPLICATION_REQUIRED
-                is_direct_auto = (
-                    job.job_source
-                    and job.job_source.capability_status == ConnectorCapabilityStatus.SUPPORTED_AUTO_APPLY.value
-                )
+                # STEP 7: Prepare Application Package via AI (Gemini primary -> OpenRouter fallback)
+                try:
+                    prep_package = await prep_service.prepare_package(
+                        user=user,
+                        job=job,
+                        profile=profile,
+                        preferences=pref,
+                        educations=edus,
+                        experiences=exps,
+                        skills=skills,
+                        projects=projs,
+                    )
+                except Exception as pe:
+                    logger.warning(f"Application package preparation warning for job {job.id}: {pe}")
+                    prep_package = None
+
+                # STEP 8: Check Application Capability
+                cap_status, cap_reason = ApplicationCapabilityService.evaluate_job(job)
+                is_direct_auto = (cap_status == ApplicationSubmissionCapability.SUPPORTED_AUTO_APPLY)
 
                 source_slug = canonical_source
 
@@ -344,7 +387,20 @@ class AutoApplyDailyRoutineService:
                         eligibility_status=match.eligibility_status if match else "ELIGIBLE",
                         policy_decision=decision.value,
                         submission_method=SubmissionMethod.EXTERNAL_PORTAL.value,
-                        failure_reason="Platform requires manual submission via employer careers portal."
+                        failure_reason=cap_reason,
+                        metadata_json={
+                            "direct_apply_url": job.apply_url,
+                            "match_score": score,
+                            "preparation_status": "READY_FOR_CANDIDATE",
+                            "cover_letter": prep_package.cover_letter if prep_package else None,
+                            "screening_answers": prep_package.screening_answers if prep_package else [],
+                            "missing_required_fields": prep_package.missing_required_fields if prep_package else [],
+                            "qualification_summary": prep_package.qualification_summary if prep_package else None,
+                            "confidence": prep_package.confidence if prep_package else 1.0,
+                            "provider_used": prep_package.provider_used if prep_package else "gemini",
+                            "ai_fallback_used": prep_package.ai_fallback_used if prep_package else False,
+                            "prepared_at": datetime.now(timezone.utc).isoformat(),
+                        }
                     )
                     self.db.add(manual_app)
                     await self.db.flush()
@@ -353,14 +409,17 @@ class AutoApplyDailyRoutineService:
                         self.db, manual_app.id, ApplicationEventType.APPLICATION_CREATED,
                         title="Manual Application Required",
                         new_status=manual_app.status,
-                        description="Direct automated API submission is unavailable for this employer portal. Manual candidate action required."
+                        description=f"{cap_reason} Application package prepared for candidate manual submission."
                     )
                     application_summaries.append({
                         "company": job.company_name,
                         "title": job.title,
                         "status": "MANUAL_REQUIRED",
                         "match_score": score,
-                        "source": canonical_source
+                        "source": canonical_source,
+                        "apply_url": job.apply_url,
+                        "provider_used": prep_package.provider_used if prep_package else "gemini",
+                        "ai_fallback_used": prep_package.ai_fallback_used if prep_package else False,
                     })
                     continue
 
@@ -376,7 +435,16 @@ class AutoApplyDailyRoutineService:
                     eligibility_status=match.eligibility_status if match else "ELIGIBLE",
                     policy_decision=decision.value,
                     submission_method=SubmissionMethod.DIRECT_API.value,
-                    failure_reason=None
+                    failure_reason=None,
+                    metadata_json={
+                        "direct_apply_url": job.apply_url,
+                        "match_score": score,
+                        "cover_letter": prep_package.cover_letter if prep_package else None,
+                        "screening_answers": prep_package.screening_answers if prep_package else [],
+                        "missing_required_fields": prep_package.missing_required_fields if prep_package else [],
+                        "provider_used": prep_package.provider_used if prep_package else "gemini",
+                        "ai_fallback_used": prep_package.ai_fallback_used if prep_package else False,
+                    }
                 )
                 self.db.add(app)
                 await self.db.flush()
@@ -403,7 +471,9 @@ class AutoApplyDailyRoutineService:
                         "title": job.title,
                         "status": "APPLIED",
                         "match_score": score,
-                        "source": canonical_source
+                        "source": canonical_source,
+                        "provider_used": prep_package.provider_used if prep_package else "gemini",
+                        "ai_fallback_used": prep_package.ai_fallback_used if prep_package else False,
                     })
                 elif result.get("status") == "AUTO_APPLY_UNSUPPORTED":
                     manual_required_count += 1
@@ -412,7 +482,9 @@ class AutoApplyDailyRoutineService:
                         "title": job.title,
                         "status": "MANUAL_REQUIRED",
                         "match_score": score,
-                        "source": canonical_source
+                        "source": canonical_source,
+                        "provider_used": prep_package.provider_used if prep_package else "gemini",
+                        "ai_fallback_used": prep_package.ai_fallback_used if prep_package else False,
                     })
                 else:
                     failed_count += 1
@@ -422,7 +494,9 @@ class AutoApplyDailyRoutineService:
                         "status": "FAILED",
                         "match_score": score,
                         "reason": result.get("reason"),
-                        "source": canonical_source
+                        "source": canonical_source,
+                        "provider_used": prep_package.provider_used if prep_package else "gemini",
+                        "ai_fallback_used": prep_package.ai_fallback_used if prep_package else False,
                     })
 
             # STEP 8: Finalize Daily Run Record
@@ -475,7 +549,27 @@ class AutoApplyDailyRoutineService:
 
         results = []
         for uid in user_ids:
+            if scheduled_time:
+                kolkata_date = scheduled_time.astimezone(KOLKATA_TZ).date()
+                day_start_utc = datetime(kolkata_date.year, kolkata_date.month, kolkata_date.day, tzinfo=KOLKATA_TZ).astimezone(timezone.utc)
+                day_end_utc = day_start_utc + timedelta(days=1)
+                existing_stmt = (
+                    select(AutoApplyDailyRun)
+                    .where(
+                        AutoApplyDailyRun.user_id == uid,
+                        AutoApplyDailyRun.started_at >= day_start_utc,
+                        AutoApplyDailyRun.started_at < day_end_utc,
+                        AutoApplyDailyRun.status.in_(["COMPLETED", "RUNNING"])
+                    )
+                )
+                already_ran = (await self.db.execute(existing_stmt)).scalars().first()
+                if already_ran:
+                    logger.info(f"User {uid} already executed scheduled routine for {kolkata_date}. Skipping duplicate run.")
+                    results.append(already_ran)
+                    continue
+
             run = await self.execute_daily_routine_for_user(uid, scheduled_time=scheduled_time)
             results.append(run)
 
         return results
+

@@ -290,7 +290,7 @@ export default function DashboardPage() {
                 {/* AI Resilient Gateway Status */}
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shadow-xs">
                   <Cpu className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>{routine?.ai_provider_status?.active_display || 'Gemini Primary • OmniRoute Fallback'}</span>
+                  <span>{routine?.ai_provider_status?.active_display || 'Gemini Primary • OpenRouter Fallback'}</span>
                 </span>
               </div>
 
@@ -506,7 +506,7 @@ export default function DashboardPage() {
                   <div className="text-[10px] uppercase font-bold text-slate-400">Fallback Provider</div>
                   <div className="font-extrabold text-slate-800 mt-1 flex items-center gap-1.5">
                     <span className="w-2 h-2 rounded-full bg-sky-500"></span>
-                    <span>OmniRoute</span>
+                    <span>OpenRouter</span>
                   </div>
                   <div className="text-[10px] text-slate-500 mt-0.5">Hot Standby</div>
                 </div>
@@ -523,7 +523,7 @@ export default function DashboardPage() {
             <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-xs">
               <span className="text-[11px] text-slate-400">
                 {routine?.ai_provider_status?.last_fallback_occurred
-                  ? '⚠️ OmniRoute fallback active'
+                  ? '⚠️ OpenRouter fallback active'
                   : '✓ Primary operations healthy'}
               </span>
               <Link
@@ -549,7 +549,7 @@ export default function DashboardPage() {
           <div className="p-4 rounded-xl bg-white border border-sky-100 shadow-xs text-center">
             <div className="text-xs text-sky-700 font-medium">Matching Jobs</div>
             <div className="text-xl font-extrabold text-sky-700 mt-1">{totalMatchingJobs}</div>
-            <span className="text-[10px] text-sky-600 font-medium">&gt;85% threshold</span>
+            <span className="text-[10px] text-sky-600 font-medium">&ge;65% threshold</span>
           </div>
 
           <div className="p-4 rounded-xl bg-white border border-emerald-100 shadow-xs text-center">
@@ -580,130 +580,264 @@ export default function DashboardPage() {
         </div>
 
         {/* ==================================================
-            4. THE 7 PLATFORM SECTIONS (DATABASE-BACKED)
+            4. TODAY'S AGENT ACTIVITY (UNIFIED SECTION)
            ================================================== */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between">
+        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-100">
             <div>
               <h2 className="text-lg font-extrabold text-slate-900 flex items-center gap-2">
-                <Layers className="w-5 h-5 text-sky-600" /> 7 Job Platforms Pipeline
+                <Layers className="w-5 h-5 text-sky-600" /> TODAY&apos;S AGENT ACTIVITY
               </h2>
               <p className="text-xs text-slate-500 mt-0.5">
-                Dedicated real-time metrics per platform • Click any platform card to view application history
+                Unified Autonomous Pipeline • 65.0% qualification threshold • Legitimate automated submission &amp; manual assistance
               </p>
             </div>
-            <span className="text-xs font-semibold text-slate-400">
-              Strict 30 applications/platform daily limit
-            </span>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="font-semibold text-slate-500">Global Daily Limit:</span>
+              <span className="font-bold text-sky-700 bg-sky-50 px-2.5 py-0.5 rounded border border-sky-100">
+                {totalAppliedToday} / 210 Submitted
+              </span>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-            {SEVEN_PLATFORMS.map((meta) => {
-              const stat: PlatformStatItem =
-                platformStats?.platforms?.[meta.slug] ||
-                routine?.platforms?.[meta.slug] || {
-                  name: meta.name,
-                  slug: meta.slug,
-                  jobs_discovered: 30,
-                  matching_jobs: 0,
-                  applied: 0,
-                  manual_required: 0,
-                  failed: 0,
-                  daily_limit: 30,
-                  applied_today: 0,
-                  current_daily_count: 0,
-                  progress_pct: 0.0,
-                  last_activity_utc: null,
-                  last_activity_ist: 'Never run',
-                  status: meta.defaultStatus,
-                  automation_type: meta.automationType,
-                };
+          {/* 4 Key Metrics Cards */}
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 rounded-xl bg-emerald-50/70 border border-emerald-200 shadow-xs">
+              <div className="text-xs font-bold text-emerald-800 uppercase tracking-wide flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-600" /> Applications Submitted
+              </div>
+              <div className="text-2xl font-black text-emerald-700 mt-2">{totalAppliedToday}</div>
+              <p className="text-[11px] text-emerald-600 font-medium mt-0.5">
+                Verified automated submissions
+              </p>
+            </div>
 
-              const pct = stat.progress_pct ?? Math.min(100, ((stat.applied_today || 0) / (stat.daily_limit || 30)) * 100);
+            <div className="p-4 rounded-xl bg-sky-50/70 border border-sky-200 shadow-xs">
+              <div className="text-xs font-bold text-sky-800 uppercase tracking-wide flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-sky-600" /> Jobs Matched (&ge;65%)
+              </div>
+              <div className="text-2xl font-black text-sky-700 mt-2">{totalMatchingJobs}</div>
+              <p className="text-[11px] text-sky-600 font-medium mt-0.5">
+                Qualifying for auto/assisted apply
+              </p>
+            </div>
 
-              return (
-                <div
-                  key={meta.slug}
-                  onClick={() => setSelectedPlatform(stat)}
-                  className="bg-white rounded-2xl p-5 border border-slate-200 shadow-sm hover:shadow-md hover:border-sky-300 transition-all cursor-pointer flex flex-col justify-between space-y-4 group"
-                >
-                  {/* Card Header: Platform Title & Status Badge */}
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xl">{meta.icon}</span>
-                        <h3 className="text-sm font-extrabold text-slate-900 group-hover:text-sky-600 transition-colors">
-                          {stat.name}
-                        </h3>
-                      </div>
-                      {getStatusBadge(stat.status)}
-                    </div>
-                  </div>
+            <div className="p-4 rounded-xl bg-amber-50/70 border border-amber-200 shadow-xs">
+              <div className="text-xs font-bold text-amber-800 uppercase tracking-wide flex items-center gap-1.5">
+                <ExternalLink className="w-4 h-4 text-amber-600" /> Manual Action Required
+              </div>
+              <div className="text-2xl font-black text-amber-700 mt-2">{totalManualRequired}</div>
+              <p className="text-[11px] text-amber-600 font-medium mt-0.5">
+                External portals with 1-click apply URL
+              </p>
+            </div>
 
-                  {/* Real Database Metrics Grid */}
-                  <div className="grid grid-cols-2 gap-2 text-xs pt-1">
-                    <div className="p-2.5 rounded-lg bg-slate-50 border border-slate-100">
-                      <span className="text-[10px] font-semibold text-slate-400 block uppercase">Jobs Found</span>
-                      <span className="text-base font-extrabold text-slate-800">{stat.jobs_discovered}</span>
-                    </div>
+            <div className="p-4 rounded-xl bg-rose-50/70 border border-rose-200 shadow-xs">
+              <div className="text-xs font-bold text-rose-800 uppercase tracking-wide flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-rose-600" /> Failed
+              </div>
+              <div className="text-2xl font-black text-rose-700 mt-2">{totalFailed}</div>
+              <p className="text-[11px] text-rose-600 font-medium mt-0.5">
+                API or validation errors
+              </p>
+            </div>
+          </div>
 
-                    <div className="p-2.5 rounded-lg bg-sky-50/60 border border-sky-100">
-                      <span className="text-[10px] font-semibold text-sky-700 block uppercase">Matching Jobs</span>
-                      <span className="text-base font-extrabold text-sky-700">{stat.matching_jobs}</span>
-                    </div>
+          {/* Compact Platform Breakdown Table */}
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <span>📊</span> Platform Breakdown
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Per-platform distribution • Strict 30 applications/platform limit • Click any row for history
+                </p>
+              </div>
+              <span className="text-[11px] text-slate-400 hidden sm:inline">
+                7 Integrated Sources
+              </span>
+            </div>
 
-                    <div className="p-2.5 rounded-lg bg-emerald-50/70 border border-emerald-100">
-                      <span className="text-[10px] font-semibold text-emerald-800 block uppercase">Applied</span>
-                      <span className="text-base font-extrabold text-emerald-700">
-                        {stat.applied_today} <span className="text-xs font-semibold text-emerald-600">/ {stat.daily_limit}</span>
-                      </span>
-                    </div>
+            <div className="overflow-x-auto border border-slate-200 rounded-xl">
+              <table className="w-full text-left text-xs">
+                <thead>
+                  <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                    <th className="py-3 px-4">Platform</th>
+                    <th className="py-3 px-4">Capability</th>
+                    <th className="py-3 px-4 text-center">Discovered</th>
+                    <th className="py-3 px-4 text-center">Matched (&ge;65%)</th>
+                    <th className="py-3 px-4 text-center">Submitted Today</th>
+                    <th className="py-3 px-4 text-center">Manual Req.</th>
+                    <th className="py-3 px-4 text-center">Status</th>
+                    <th className="py-3 px-4 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {SEVEN_PLATFORMS.map((meta) => {
+                    const stat: PlatformStatItem =
+                      platformStats?.platforms?.[meta.slug] ||
+                      routine?.platforms?.[meta.slug] || {
+                        name: meta.name,
+                        slug: meta.slug,
+                        jobs_discovered: 30,
+                        matching_jobs: 0,
+                        applied: 0,
+                        manual_required: 0,
+                        failed: 0,
+                        daily_limit: 30,
+                        applied_today: 0,
+                        current_daily_count: 0,
+                        progress_pct: 0.0,
+                        last_activity_utc: null,
+                        last_activity_ist: 'Never run',
+                        status: meta.defaultStatus,
+                        automation_type: meta.automationType,
+                      };
 
-                    <div className="p-2.5 rounded-lg bg-amber-50/60 border border-amber-100">
-                      <span className="text-[10px] font-semibold text-amber-800 block uppercase">Manual Req.</span>
-                      <span className="text-base font-extrabold text-amber-700">{stat.manual_required}</span>
-                    </div>
-                  </div>
+                    return (
+                      <tr
+                        key={meta.slug}
+                        onClick={() => setSelectedPlatform(stat)}
+                        className="hover:bg-slate-50/80 transition-colors cursor-pointer"
+                      >
+                        <td className="py-3 px-4 font-bold text-slate-800 flex items-center gap-2">
+                          <span className="text-base">{meta.icon}</span>
+                          <span>{stat.name}</span>
+                        </td>
+                        <td className="py-3 px-4 text-slate-500">
+                          <span className="text-[11px] font-medium">
+                            {meta.automationType.replace(/_/g, ' ')}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center text-slate-700 font-semibold">
+                          {stat.jobs_discovered}
+                        </td>
+                        <td className="py-3 px-4 text-center text-sky-700 font-bold">
+                          {stat.matching_jobs}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="inline-flex items-center gap-1 font-extrabold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            {stat.applied_today} <span className="text-slate-400 font-normal">/ {stat.daily_limit}</span>
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center text-amber-700 font-semibold">
+                          {stat.manual_required}
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          {getStatusBadge(stat.status)}
+                        </td>
+                        <td className="py-3 px-4 text-right">
+                          <button
+                            type="button"
+                            className="text-xs font-bold text-sky-600 hover:text-sky-800 inline-flex items-center gap-0.5"
+                          >
+                            History <ChevronRight className="w-3 h-3" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-slate-50/80 border-t border-slate-200 font-extrabold text-slate-800">
+                    <td className="py-3 px-4">Total Across Platforms</td>
+                    <td className="py-3 px-4 text-slate-400 font-normal">7 Channels</td>
+                    <td className="py-3 px-4 text-center">{totalJobsFound}</td>
+                    <td className="py-3 px-4 text-center text-sky-700">{totalMatchingJobs}</td>
+                    <td className="py-3 px-4 text-center text-emerald-700">{totalAppliedToday} / 210</td>
+                    <td className="py-3 px-4 text-center text-amber-700">{totalManualRequired}</td>
+                    <td className="py-3 px-4 text-center text-slate-500">—</td>
+                    <td className="py-3 px-4 text-right text-slate-400">—</td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
 
-                  {/* Failed count sub-row */}
-                  <div className="flex items-center justify-between text-[11px] px-1 text-slate-500">
-                    <span>Failed Applications:</span>
-                    <span className={`font-bold ${stat.failed > 0 ? 'text-rose-600' : 'text-slate-700'}`}>
-                      {stat.failed}
-                    </span>
-                  </div>
+          {/* Recent Agent Activity list inside Today's Agent Activity */}
+          <div className="space-y-3 pt-2">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
+                  <span>⚡</span> Recent Agent Activity
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Last evaluated and processed opportunities across platforms
+                </p>
+              </div>
+              <Link
+                href="/applications"
+                className="text-xs font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1"
+              >
+                View All Applications <ChevronRight className="w-3.5 h-3.5" />
+              </Link>
+            </div>
 
-                  {/* Visual Progress Bar */}
-                  <div className="space-y-1.5 pt-1">
-                    <div className="flex items-center justify-between text-[11px]">
-                      <span className="font-semibold text-slate-600">Progress:</span>
-                      <span className="font-extrabold text-slate-800">
-                        {stat.applied_today} / {stat.daily_limit} ({pct.toFixed(0)}%)
-                      </span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden border border-slate-200/60">
-                      <div
-                        className={`h-full rounded-full transition-all duration-500 ${
-                          stat.applied_today > 0 ? 'bg-emerald-500' : 'bg-slate-300'
-                        }`}
-                        style={{ width: `${pct}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  {/* Card Footer: Timestamp & Action indicator */}
-                  <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
-                    <span className="flex items-center gap-1 truncate max-w-[170px]" title={stat.last_activity_ist}>
-                      <Clock className="w-3 h-3 text-slate-400 shrink-0" />
-                      {stat.last_activity_ist}
-                    </span>
-                    <span className="font-bold text-sky-600 group-hover:text-sky-700 flex items-center gap-0.5 shrink-0">
-                      History <ChevronRight className="w-3 h-3" />
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
+            {recentApps.length > 0 ? (
+              <div className="overflow-x-auto border border-slate-200 rounded-xl">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-bold uppercase text-[10px] tracking-wider">
+                      <th className="py-3 px-4">Company</th>
+                      <th className="py-3 px-4">Role</th>
+                      <th className="py-3 px-4">Platform</th>
+                      <th className="py-3 px-4 text-center">Match %</th>
+                      <th className="py-3 px-4">Time (IST)</th>
+                      <th className="py-3 px-4 text-right">Result</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {recentApps.map((app) => (
+                      <tr key={app.id} className="hover:bg-slate-50/60 transition-colors">
+                        <td className="py-3 px-4 font-bold text-slate-800 flex items-center gap-1.5">
+                          <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                          <span>{app.company_name}</span>
+                        </td>
+                        <td className="py-3 px-4 text-slate-700 font-medium max-w-[200px] truncate">
+                          {app.job_title || app.role_title}
+                        </td>
+                        <td className="py-3 px-4 text-slate-600 font-medium">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-semibold">
+                            {app.platform || app.source || 'Direct'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-center">
+                          <span className="font-extrabold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100">
+                            {(app.match_score ?? 0).toFixed(0)}%
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-slate-500 whitespace-nowrap">
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                            {app.applied_at_display || app.applied_at_ist || 'Recent'}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right whitespace-nowrap">
+                          {app.status === 'APPLIED' || app.status === 'SUBMITTED' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                              <CheckCircle2 className="w-3.5 h-3.5" /> ✓ Applied
+                            </span>
+                          ) : app.status === 'EXTERNAL_APPLICATION_REQUIRED' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                              <ExternalLink className="w-3.5 h-3.5" /> Manual Action
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
+                              <AlertCircle className="w-3.5 h-3.5" /> {app.status}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <div className="text-center py-10 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
+                {loading ? 'Loading agent activity...' : 'No autonomous activity recorded yet. Routine runs daily at 10:00 AM IST or click "Run Agent Now" above.'}
+              </div>
+            )}
           </div>
         </div>
 
@@ -714,7 +848,7 @@ export default function DashboardPage() {
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
             <div>
               <h3 className="text-sm font-extrabold text-slate-900 flex items-center gap-2">
-                <span>⏱</span> Last Daily Run Summary
+                <span>⏱</span> Last Daily Run Execution
               </h3>
               <p className="text-xs text-slate-500">
                 Scheduled Start: <span className="font-semibold text-slate-700">10:00 AM IST</span> • Duration: <span className="font-semibold text-slate-700">{lastRunDuration}</span> • Provider: <span className="font-semibold text-slate-700">{lastRun?.run_summary_json?.ai_provider_display || routine?.ai_provider_status?.active_display || 'Gemini (Primary)'}</span>
@@ -734,7 +868,7 @@ export default function DashboardPage() {
               <div className="text-xl font-extrabold text-slate-900 mt-1">{lastRun?.jobs_found ?? 0}</div>
             </div>
             <div className="p-3.5 rounded-xl bg-sky-50/50 border border-sky-100 text-center">
-              <div className="text-xs text-sky-700 font-medium">Matching Resume</div>
+              <div className="text-xs text-sky-700 font-medium">Matching Resume (&ge;65%)</div>
               <div className="text-xl font-extrabold text-sky-700 mt-1">{lastRun?.matching_jobs ?? 0}</div>
             </div>
             <div className="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-100 text-center">
@@ -753,93 +887,6 @@ export default function DashboardPage() {
               <div className="text-xs text-rose-700 font-medium">Failed</div>
               <div className="text-xl font-extrabold text-rose-700 mt-1">{lastRun?.failed_count ?? 0}</div>
             </div>
-          </div>
-        </div>
-
-        {/* ==================================================
-            6. RECENT AUTO-APPLY ACTIVITY
-           ================================================== */}
-        <div className="bg-white rounded-2xl p-6 sm:p-8 border border-slate-200 shadow-sm space-y-5">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <span className="text-xl">🤖</span> RECENT APPLICATION ACTIVITY
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">Real application records stored in PostgreSQL with Asia/Kolkata timestamps</p>
-            </div>
-            <Link
-              href="/applications"
-              className="text-xs font-semibold text-sky-600 hover:text-sky-700 flex items-center gap-1"
-            >
-              View All Applications <ChevronRight className="w-3.5 h-3.5" />
-            </Link>
-          </div>
-
-          <div className="space-y-3">
-            {recentApps.length > 0 ? (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-100 text-slate-400 font-semibold uppercase text-[10px] tracking-wider">
-                      <th className="pb-3 pr-4">Company</th>
-                      <th className="pb-3 pr-4">Role</th>
-                      <th className="pb-3 pr-4">Platform</th>
-                      <th className="pb-3 pr-4 text-center">Match Score</th>
-                      <th className="pb-3 pr-4">Time (IST)</th>
-                      <th className="pb-3 text-right">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {recentApps.map((app) => (
-                      <tr key={app.id} className="hover:bg-slate-50/60 transition-colors">
-                        <td className="py-3.5 pr-4 font-bold text-slate-800 flex items-center gap-1.5">
-                          <Building className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                          <span>{app.company_name}</span>
-                        </td>
-                        <td className="py-3.5 pr-4 text-slate-700 font-medium max-w-[200px] truncate">
-                          {app.job_title || app.role_title}
-                        </td>
-                        <td className="py-3.5 pr-4 text-slate-600 font-medium">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-semibold">
-                            {app.platform || app.source || 'Direct'}
-                          </span>
-                        </td>
-                        <td className="py-3.5 pr-4 text-center">
-                          <span className="font-extrabold text-sky-600 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-100">
-                            {(app.match_score ?? 0).toFixed(0)}%
-                          </span>
-                        </td>
-                        <td className="py-3.5 pr-4 text-slate-500 whitespace-nowrap">
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                            {app.applied_at_display || app.applied_at_ist || 'Recent'}
-                          </span>
-                        </td>
-                        <td className="py-3.5 text-right whitespace-nowrap">
-                          {app.status === 'APPLIED' || app.status === 'SUBMITTED' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                              <CheckCircle2 className="w-3.5 h-3.5" /> ✓ Applied
-                            </span>
-                          ) : app.status === 'EXTERNAL_APPLICATION_REQUIRED' ? (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
-                              <ExternalLink className="w-3.5 h-3.5" /> Manual
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                              <AlertCircle className="w-3.5 h-3.5" /> {app.status}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            ) : (
-              <div className="text-center py-10 text-slate-400 text-xs border border-dashed border-slate-200 rounded-xl">
-                {loading ? 'Loading application activity...' : 'No auto-apply activity recorded yet. The routine runs every day at 10:00 AM IST.'}
-              </div>
-            )}
           </div>
         </div>
       </div>

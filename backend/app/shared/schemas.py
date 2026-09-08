@@ -150,7 +150,7 @@ class JobPreferenceUpdate(BaseModel):
     experience_min_years: Optional[float] = 0.0
     experience_max_years: Optional[float] = None
     job_freshness_days: int = 30
-    minimum_match_score: float = 70.0
+    minimum_match_score: float = 65.0
     target_industries: List[str] = []
     sponsorship_required: bool = False
 
@@ -393,7 +393,7 @@ class DashboardAnalytics(BaseModel):
 
 class ApplicationPolicyUpdate(BaseModel):
     auto_apply_enabled: bool = False
-    minimum_match_score: float = 85.0
+    minimum_match_score: float = 65.0
     minimum_salary: Optional[int] = None
     maximum_experience: Optional[float] = None
     preferred_roles: List[str] = []

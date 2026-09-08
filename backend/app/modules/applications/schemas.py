@@ -6,7 +6,7 @@ from pydantic import BaseModel, Field, EmailStr, model_validator
 
 class ApplicationPolicyBase(BaseModel):
     auto_apply_enabled: bool = False
-    minimum_match_score: float = Field(85.0, ge=0.0, le=100.0)
+    minimum_match_score: float = Field(65.0, ge=0.0, le=100.0)
     minimum_salary: Optional[int] = Field(None, ge=0)
     maximum_experience: Optional[float] = Field(None, ge=0.0)
 
