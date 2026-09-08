@@ -294,7 +294,8 @@ class GeminiProvider(BaseLLMService):
                 "responseMimeType": "application/json"
             }
         }
-        async with httpx.AsyncClient(timeout=45.0) as client:
+        # No artificial cutoff — allow AI to think and stream continuously until completion
+        async with httpx.AsyncClient(timeout=None) as client:
             res = await client.post(self.base_url, json=payload)
             res.raise_for_status()
             data = res.json()

@@ -631,22 +631,28 @@ class ResumeExtractionService:
             raise ValueError("Resume text is empty or too short for analysis.")
 
         system_prompt = (
-            "You are an AI Resume Intelligence Extraction Engine.\n"
+            "You are an expert AI Resume Intelligence & Candidate Profiling Engine.\n"
+            "Your objective is to thoroughly, exhaustively, and accurately extract all candidate details without rushing or cutting corners.\n"
             "STRICT RULES:\n"
-            "1. NEVER invent, assume, or hallucinate information that is not explicitly in the text.\n"
-            "2. If a section (e.g. Certifications, Projects, CGPA) is missing, leave the array empty or field as null.\n"
-            "3. If any extracted date, phone number, or credential is ambiguous or uncertain, set 'is_uncertain: true'.\n"
-            "4. Categorize all extracted skills into: programming_languages, frameworks, databases, cloud, tools, and soft_skills.\n"
-            "5. Return strictly valid JSON matching the StructuredResumeData schema."
+            "1. Read the entire resume comprehensively from start to finish.\n"
+            "2. NEVER invent, assume, or hallucinate information that is not explicitly in the text.\n"
+            "3. Extract EVERY genuine project, including title, complete description, technologies used, and any repository/live links.\n"
+            "4. Extract EVERY genuine work experience, accurately identifying the real company/organization name, role title, dates, responsibilities, and technologies used. Never use generic placeholders like 'Company'.\n"
+            "5. Distinguish extracurricular activities/committees/clubs (e.g. Training & Placement Cell, Event Organiser) from actual technical tools. Place them appropriately or under soft skills / description, NOT Developer Tools.\n"
+            "6. Accurately capture educational history (degrees, institutions, CGPA/percentage, graduation years).\n"
+            "7. Categorize all extracted skills accurately into: programming_languages, frameworks, databases, cloud, tools, and soft_skills.\n"
+            "8. Return strictly valid JSON matching the StructuredResumeData schema."
         )
 
-        prompt = f"Extract structured candidate data from the following resume text:\n\n{raw_text[:8000]}"
+        prompt = (
+            "Carefully and comprehensively extract all structured candidate data from the following resume text. "
+            "Ensure every project, every work experience, every skill, and all educational details are meticulously captured:\n\n"
+            f"{raw_text[:12000]}"
+        )
 
         try:
-            structured = await asyncio.wait_for(
-                self.ai.generate_structured(prompt, system_prompt, StructuredResumeData),
-                timeout=40.0
-            )
+            # Continuous AI execution: No artificial time limit, allow model to fully parse every section carefully
+            structured = await self.ai.generate_structured(prompt, system_prompt, StructuredResumeData)
             # Post-process: deduplicate skills
             if structured.skills:
                 structured.skills = self.deduplicate_skills(structured.skills)
