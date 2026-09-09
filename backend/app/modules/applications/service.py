@@ -33,7 +33,8 @@ from app.modules.applications.schemas import (
     ApplicationStatisticsRead,
     ProcessQueueResponse,
     PlatformStatItem,
-    PlatformsDashboardResponse
+    PlatformsDashboardResponse,
+    TodayAuditResponse
 )
 from app.modules.applications.policy import ApplicationPolicyEngine
 from app.modules.applications.duplicate import DuplicateDetector
@@ -44,7 +45,18 @@ from app.modules.applications.events import ApplicationEventManager
 import logging
 from app.modules.applications.audit import ApplicationAuditLogger
 from app.modules.applications.state_machine import ApplicationStateMachine
-from app.modules.applications.window_service import is_application_window_open
+from app.modules.applications.window_service import (
+    is_application_window_open,
+    get_application_window_status,
+    get_next_application_window
+)
+from app.modules.applications.date_utils import (
+    get_current_business_day_range,
+    ensure_utc,
+    to_ist,
+    format_ist,
+    KOLKATA_TZ
+)
 
 logger = logging.getLogger("app.applications.service")
 
@@ -142,7 +154,8 @@ class ApplicationService:
         self,
         user_id: uuid.UUID,
         job_id: uuid.UUID,
-        immediate_process: bool = False
+        immediate_process: bool = False,
+        enforce_window: bool = False
     ) -> Application:
         """Evaluates a job for auto-apply, creates application record, enqueues if eligible, and executes if requested."""
         # 1. Load Job
@@ -166,12 +179,14 @@ class ApplicationService:
         match = (await self.db.execute(stmt_match)).scalar_one_or_none()
         policy = await self.get_or_create_policy(user_id)
 
-        today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
+        start_of_today_utc, end_of_today_utc = get_current_business_day_range()
+        ts_col = func.coalesce(Application.applied_date, Application.created_at)
         stmt_daily = select(func.count(Application.id)).where(
             and_(
                 Application.user_id == user_id,
                 Application.status.in_([ApplicationStatus.APPLIED.value, ApplicationStatus.SUBMITTED.value]),
-                Application.applied_date >= today_start
+                ts_col >= start_of_today_utc,
+                ts_col <= end_of_today_utc
             )
         )
         daily_count = (await self.db.execute(stmt_daily)).scalar_one()
@@ -187,10 +202,16 @@ class ApplicationService:
 
         source_slug = job.job_source.slug if job.job_source else (job.source if hasattr(job, 'source') else "direct")
 
+        # Check Application Execution Window (10:00 AM - 11:59 AM IST)
+        window_open = True if (immediate_process or not enforce_window) else is_application_window_open()
+
         # 5. Create Application in initial state
-        initial_status = ApplicationStatus.QUEUED.value if is_approved else (
-            ApplicationStatus.BLOCKED.value if decision.value == "SKIP_INELIGIBLE" else ApplicationStatus.POLICY_PENDING.value
-        )
+        if is_approved:
+            initial_status = ApplicationStatus.QUEUED.value if window_open else ApplicationStatus.QUEUED_FOR_NEXT_WINDOW.value
+        else:
+            initial_status = (
+                ApplicationStatus.BLOCKED.value if decision.value == "SKIP_INELIGIBLE" else ApplicationStatus.POLICY_PENDING.value
+            )
 
         app = Application(
             id=uuid.uuid4(),
@@ -208,23 +229,37 @@ class ApplicationService:
         self.db.add(app)
         await self.db.flush()
 
+        event_title = "Application Created via Auto-Apply Evaluation" if window_open else "Application Prepared & Queued For Next Window"
+        event_desc = policy_reason if window_open else "Prepared outside 10:00 AM - 11:59 AM IST window. Staged for dispatch during next window."
         await ApplicationEventManager.log_event(
             self.db, app.id, ApplicationEventType.APPLICATION_CREATED,
-            title="Application Created via Auto-Apply Evaluation",
+            title=event_title,
             new_status=app.status,
-            description=policy_reason
+            description=event_desc
         )
         await self.db.commit()
 
         # 6. Enqueue if approved
         if is_approved:
             queue_service = ApplicationQueueService(self.db)
-            queue_item = await queue_service.enqueue(user_id, app.id, job.id, priority=10)
-            await self.db.commit()
+            if not window_open:
+                queue_item = ApplicationQueueItem(
+                    id=uuid.uuid4(),
+                    user_id=user_id,
+                    application_id=app.id,
+                    job_id=job.id,
+                    priority=10,
+                    status=QueueStatus.QUEUED_FOR_NEXT_WINDOW.value
+                )
+                self.db.add(queue_item)
+                await self.db.commit()
+            else:
+                queue_item = await queue_service.enqueue(user_id, app.id, job.id, priority=10)
+                await self.db.commit()
 
-            if immediate_process:
-                agent = ApplicationAgent(self.db)
-                await agent.process_queue_item(queue_item)
+                if immediate_process:
+                    agent = ApplicationAgent(self.db)
+                    await agent.process_queue_item(queue_item)
 
         return await self.get_application_by_id(app.id)
 
@@ -312,13 +347,9 @@ class ApplicationService:
         limit: int = 50,
         offset: int = 0
     ) -> List[Application]:
-        from zoneinfo import ZoneInfo
         from datetime import timedelta
-        kolkata_tz = ZoneInfo("Asia/Kolkata")
         now_utc = datetime.now(timezone.utc)
-        now_kolkata = now_utc.astimezone(kolkata_tz)
-        start_of_today_kolkata = now_kolkata.replace(hour=0, minute=0, second=0, microsecond=0)
-        start_of_today_utc = start_of_today_kolkata.astimezone(timezone.utc)
+        start_of_today_utc, end_of_today_utc = get_current_business_day_range(now_utc)
 
         stmt = (
             select(Application)
@@ -344,10 +375,10 @@ class ApplicationService:
             tr = time_range.lower()
             ts_col = func.coalesce(Application.applied_date, Application.created_at)
             if tr == "today":
-                stmt = stmt.where(ts_col >= start_of_today_utc)
+                stmt = stmt.where(and_(ts_col >= start_of_today_utc, ts_col <= end_of_today_utc))
             elif tr == "yesterday":
-                start_yesterday_utc = (start_of_today_kolkata - timedelta(days=1)).astimezone(timezone.utc)
-                stmt = stmt.where(and_(ts_col >= start_yesterday_utc, ts_col < start_of_today_utc))
+                start_yesterday_utc, end_yesterday_utc = get_current_business_day_range(now_utc - timedelta(days=1))
+                stmt = stmt.where(and_(ts_col >= start_yesterday_utc, ts_col <= end_yesterday_utc))
             elif tr in ["7d", "last_7_days"]:
                 seven_d_utc = now_utc - timedelta(days=7)
                 stmt = stmt.where(ts_col >= seven_d_utc)
@@ -474,15 +505,12 @@ class ApplicationService:
         )
 
     async def get_platform_statistics(self, user_id: uuid.UUID) -> PlatformsDashboardResponse:
-        from zoneinfo import ZoneInfo
         from app.database.models.application import AutoApplyDailyRun
         from app.modules.jobs.connectors.adapters import get_connector_by_slug
 
-        kolkata_tz = ZoneInfo("Asia/Kolkata")
+        start_of_today_utc, end_of_today_utc = get_current_business_day_range()
         now_utc = datetime.now(timezone.utc)
-        now_kolkata = now_utc.astimezone(kolkata_tz)
-        start_of_today_kolkata = now_kolkata.replace(hour=0, minute=0, second=0, microsecond=0)
-        start_of_today_utc = start_of_today_kolkata.astimezone(timezone.utc)
+        now_kolkata = now_utc.astimezone(KOLKATA_TZ)
         date_str = now_kolkata.strftime("%Y-%m-%d")
 
         policy = await self.get_or_create_policy(user_id)
@@ -541,13 +569,7 @@ class ApplicationService:
         total_applied_today = 0
         total_manual_today = 0
         total_failed_today = 0
-
-        def ensure_utc(dt: Optional[datetime]) -> Optional[datetime]:
-            if not dt:
-                return None
-            if dt.tzinfo is None:
-                return dt.replace(tzinfo=timezone.utc)
-            return dt.astimezone(timezone.utc)
+        total_matching_jobs = 0
 
         for cfg in PLATFORM_CONFIG:
             slug = cfg["slug"]
@@ -563,7 +585,8 @@ class ApplicationService:
             jobs_discovered = sum(job_counts_by_source.get(s, 0) for s in target_slugs)
 
             # Matching jobs
-            matching_jobs = sum(match_counts_by_source.get(s, 0) for s in target_slugs)
+            plat_matching_jobs = sum(match_counts_by_source.get(s, 0) for s in target_slugs)
+            total_matching_jobs += plat_matching_jobs
 
             # User applications for this platform
             plat_apps = [
@@ -578,8 +601,8 @@ class ApplicationService:
             ]
             applied_today = [
                 a for a in applied_all
-                if (ensure_utc(a.applied_date) and ensure_utc(a.applied_date) >= start_of_today_utc)
-                or (ensure_utc(a.submitted_at) and ensure_utc(a.submitted_at) >= start_of_today_utc)
+                if ensure_utc(a.applied_date or a.submitted_at or a.created_at)
+                and start_of_today_utc <= ensure_utc(a.applied_date or a.submitted_at or a.created_at) <= end_of_today_utc
             ]
 
             # Manual required all time & today
@@ -589,7 +612,8 @@ class ApplicationService:
             ]
             manual_today = [
                 a for a in manual_all
-                if (ensure_utc(a.created_at) and ensure_utc(a.created_at) >= start_of_today_utc)
+                if ensure_utc(a.created_at or a.applied_date)
+                and start_of_today_utc <= ensure_utc(a.created_at or a.applied_date) <= end_of_today_utc
             ]
 
             # Failed all time & today
@@ -599,7 +623,14 @@ class ApplicationService:
             ]
             failed_today = [
                 a for a in failed_all
-                if (ensure_utc(a.created_at) and ensure_utc(a.created_at) >= start_of_today_utc)
+                if ensure_utc(a.created_at or a.applied_date)
+                and start_of_today_utc <= ensure_utc(a.created_at or a.applied_date) <= end_of_today_utc
+            ]
+
+            # Queued for next window
+            queued_all = [
+                a for a in plat_apps
+                if a.status == ApplicationStatus.QUEUED_FOR_NEXT_WINDOW.value
             ]
 
             daily_limit = 30
@@ -624,10 +655,7 @@ class ApplicationService:
                     if last_run.run_summary_json["source_counts"].get(slug, 0) > 0:
                         last_activity_utc = ensure_utc(last_run.completed_at)
 
-            if last_activity_utc:
-                last_activity_ist = last_activity_utc.astimezone(kolkata_tz).strftime("%d %b %Y, %I:%M %p IST")
-            else:
-                last_activity_ist = "Never run"
+            last_activity_ist = format_ist(last_activity_utc)
 
             # Determine live status
             connector = get_connector_by_slug(slug)
@@ -656,12 +684,15 @@ class ApplicationService:
                 name=name,
                 slug=slug,
                 jobs_discovered=jobs_discovered,
-                matching_jobs=matching_jobs,
+                matching_jobs=plat_matching_jobs,
                 applied=len(applied_all),
                 manual_required=len(manual_all),
                 failed=len(failed_all),
                 daily_limit=daily_limit,
                 applied_today=applied_count_today,
+                manual_today=len(manual_today),
+                failed_today=len(failed_today),
+                queued_today=len(queued_all),
                 current_daily_count=current_daily_count,
                 progress_pct=progress_pct,
                 last_activity_utc=last_activity_utc,
@@ -676,7 +707,6 @@ class ApplicationService:
             if a.status == ApplicationStatus.QUEUED_FOR_NEXT_WINDOW.value
         )
 
-        from app.modules.applications.window_service import get_application_window_status
         window_status_dict = get_application_window_status()
 
         return PlatformsDashboardResponse(
@@ -687,6 +717,67 @@ class ApplicationService:
             total_manual_required_today=total_manual_today,
             total_failed_today=total_failed_today,
             total_queued_for_next_window=total_queued_for_next_window,
+            total_matching_jobs=total_matching_jobs,
             application_window=window_status_dict,
             platforms=platforms_map
+        )
+
+    async def get_today_audit(self, user_id: uuid.UUID) -> TodayAuditResponse:
+        """Returns deep candidate-isolated forensic verification metrics for the current calendar day in IST."""
+        start_utc, end_utc = get_current_business_day_range()
+        now_utc = datetime.now(timezone.utc)
+        now_ist = now_utc.astimezone(KOLKATA_TZ)
+
+        stats = await self.get_platform_statistics(user_id)
+        window_status = get_application_window_status()
+
+        # Fetch applications processed today
+        apps_today = await self.list_applications(user_id=user_id, time_range="today", limit=50)
+        recent_activity_today = [
+            {
+                "id": str(a.id),
+                "job_title": a.job.title if a.job else "Job Application",
+                "company_name": a.job.company_name if a.job else "Company",
+                "source": a.source,
+                "status": a.status,
+                "match_score": a.match_score,
+                "applied_at": a.applied_date.isoformat() if a.applied_date else (a.created_at.isoformat() if a.created_at else None),
+                "applied_at_ist": format_ist(a.applied_date or a.created_at),
+                "submission_method": a.submission_method
+            }
+            for a in apps_today
+        ]
+
+        metrics_today = {
+            "applications_submitted": stats.total_applied_today,
+            "queued_for_next_window": stats.total_queued_for_next_window,
+            "jobs_matched_qualifying": stats.total_matching_jobs,
+            "manual_required": stats.total_manual_required_today,
+            "failed": stats.total_failed_today
+        }
+
+        platforms_summary = {
+            slug: {
+                "name": p.name,
+                "discovered": p.jobs_discovered,
+                "matching": p.matching_jobs,
+                "submitted_today": p.applied_today,
+                "manual_today": p.manual_today,
+                "failed_today": p.failed_today,
+                "queued_today": p.queued_today,
+                "status": p.status
+            }
+            for slug, p in stats.platforms.items()
+        }
+
+        return TodayAuditResponse(
+            user_id=str(user_id),
+            date_ist=now_ist.strftime("%Y-%m-%d"),
+            start_of_today_utc=start_utc,
+            end_of_today_utc=end_utc,
+            current_time_ist=now_ist.strftime("%b %d, %Y • %I:%M:%S %p IST"),
+            application_window=window_status,
+            metrics_today=metrics_today,
+            platforms=platforms_summary,
+            recent_activity_today=recent_activity_today
         )

@@ -225,9 +225,10 @@ export default function DashboardPage() {
       : data?.metrics?.jobs_found ?? 210;
 
   const totalMatchingJobs =
-    platformStats
+    platformStats?.total_matching_jobs ??
+    (platformStats
       ? Object.values(platformStats.platforms || {}).reduce((sum, p) => sum + (p.matching_jobs || 0), 0)
-      : data?.metrics?.recommended_jobs ?? (lastRun?.matching_jobs ?? 0);
+      : data?.metrics?.recommended_jobs ?? (lastRun?.matching_jobs ?? 0));
 
   const totalManualRequired =
     platformStats?.total_manual_required_today ??
@@ -240,7 +241,7 @@ export default function DashboardPage() {
   const totalQueuedForNextWindow =
     platformStats?.total_queued_for_next_window ??
     routine?.queued_for_next_window_count ??
-    0;
+    (lastRun?.queued_count ?? 0);
 
   const appWindow =
     platformStats?.application_window ??
@@ -623,11 +624,23 @@ export default function DashboardPage() {
                 Unified Autonomous Pipeline • 65.0% qualification threshold • Legitimate automated submission &amp; manual assistance
               </p>
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="font-semibold text-slate-500">Global Daily Limit:</span>
-              <span className="font-bold text-sky-700 bg-sky-50 px-2.5 py-0.5 rounded border border-sky-100">
-                {totalAppliedToday} / 210 Submitted
-              </span>
+            <div className="flex items-center gap-3 text-xs">
+              <button
+                type="button"
+                onClick={() => loadDashboard()}
+                disabled={loading}
+                title="Refresh real-time data"
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors font-semibold cursor-pointer"
+              >
+                <RotateCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                <span>Refresh</span>
+              </button>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-slate-500 hidden sm:inline">Global Daily Limit:</span>
+                <span className="font-bold text-sky-700 bg-sky-50 px-2.5 py-0.5 rounded border border-sky-100">
+                  {totalAppliedToday} / 210 Submitted
+                </span>
+              </div>
             </div>
           </div>
 
@@ -649,7 +662,7 @@ export default function DashboardPage() {
               </div>
               <div className="text-2xl font-black text-indigo-700 mt-2">{totalQueuedForNextWindow}</div>
               <p className="text-[11px] text-indigo-600 font-medium mt-0.5">
-                Eligible &amp; prepared (10 AM IST)
+                Eligible automatic applications awaiting 10 AM IST
               </p>
             </div>
 
@@ -659,7 +672,7 @@ export default function DashboardPage() {
               </div>
               <div className="text-2xl font-black text-sky-700 mt-2">{totalMatchingJobs}</div>
               <p className="text-[11px] text-sky-600 font-medium mt-0.5">
-                Qualifying for auto/assisted apply
+                Qualifying opportunities at or above 65%
               </p>
             </div>
 
@@ -669,7 +682,7 @@ export default function DashboardPage() {
               </div>
               <div className="text-2xl font-black text-amber-700 mt-2">{totalManualRequired}</div>
               <p className="text-[11px] text-amber-600 font-medium mt-0.5">
-                External portals with direct link
+                External portals requiring candidate action
               </p>
             </div>
 
@@ -679,7 +692,7 @@ export default function DashboardPage() {
               </div>
               <div className="text-2xl font-black text-rose-700 mt-2">{totalFailed}</div>
               <p className="text-[11px] text-rose-600 font-medium mt-0.5">
-                API or validation errors
+                Actual submission/processing failures
               </p>
             </div>
           </div>
@@ -859,13 +872,21 @@ export default function DashboardPage() {
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                               <CheckCircle2 className="w-3.5 h-3.5" /> ✓ Applied
                             </span>
+                          ) : app.status === 'QUEUED_FOR_NEXT_WINDOW' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                              <Clock className="w-3.5 h-3.5" /> Queued (10 AM IST)
+                            </span>
                           ) : app.status === 'EXTERNAL_APPLICATION_REQUIRED' ? (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
                               <ExternalLink className="w-3.5 h-3.5" /> Manual Action
                             </span>
+                          ) : app.status === 'SKIPPED' ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-slate-50 text-slate-600 border border-slate-200">
+                              <Clock className="w-3.5 h-3.5" /> Skipped
+                            </span>
                           ) : (
                             <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-700 border border-rose-200">
-                              <AlertCircle className="w-3.5 h-3.5" /> {app.status}
+                              <AlertCircle className="w-3.5 h-3.5" /> {app.status === 'FAILED' ? 'Failed' : app.status}
                             </span>
                           )}
                         </td>
@@ -1067,6 +1088,10 @@ export default function DashboardPage() {
                               {app.status === 'APPLIED' || app.status === 'SUBMITTED' ? (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                   <CheckCircle2 className="w-3 h-3" /> ✓ Applied
+                                </span>
+                              ) : app.status === 'QUEUED_FOR_NEXT_WINDOW' ? (
+                                <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200">
+                                  <Clock className="w-3 h-3" /> Queued (10 AM IST)
                                 </span>
                               ) : app.status === 'EXTERNAL_APPLICATION_REQUIRED' ? (
                                 <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">

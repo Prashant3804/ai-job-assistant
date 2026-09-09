@@ -289,6 +289,7 @@ class AutoApplyDailyRoutineService:
             manual_required_count = 0
             failed_count = 0
             skipped_count = 0
+            queued_count = 0
             application_summaries = []
 
             # Load candidate detailed records for zero-hallucination application preparation
@@ -541,6 +542,7 @@ class AutoApplyDailyRoutineService:
                     )
                     await self.db.commit()
 
+                    queued_count += 1
                     application_summaries.append({
                         "company": job.company_name,
                         "title": job.title,
@@ -646,6 +648,7 @@ class AutoApplyDailyRoutineService:
                 "source_limits": {s: source_limit for s in SEVEN_SOURCES},
                 "total_processed": sum(source_counts.values()),
                 "max_daily_capacity": max_daily_capacity,
+                "queued_count": queued_count,
                 "applications": application_summaries[:50],
                 "duration_seconds": round((run_record.completed_at - run_record.started_at).total_seconds(), 2),
                 "ai_provider": ai_status.get("last_provider_used", "gemini"),

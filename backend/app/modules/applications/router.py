@@ -20,7 +20,8 @@ from app.modules.applications.schemas import (
     ProcessQueueResponse,
     AutoApplyDailyRoutineInfo,
     AutoApplyDailyRunRead,
-    PlatformsDashboardResponse
+    PlatformsDashboardResponse,
+    TodayAuditResponse
 )
 from app.modules.applications.service import ApplicationService
 from app.modules.applications.daily_routine import AutoApplyDailyRoutineService
@@ -241,4 +242,13 @@ async def get_platforms_statistics(
 ):
     service = ApplicationService(db)
     return await service.get_platform_statistics(current_user.id)
+
+@router.get("/auto-apply/audit/today", response_model=TodayAuditResponse)
+async def get_today_audit(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    service = ApplicationService(db)
+    return await service.get_today_audit(current_user.id)
+
 

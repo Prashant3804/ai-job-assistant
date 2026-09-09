@@ -412,13 +412,12 @@ class ResilientAIService(BaseLLMService):
         is_fallback_active = self.last_fallback_occurred and self.last_provider_used != "gemini"
         fallback_label = "OpenRouter" if getattr(settings, "OPENROUTER_API_KEY", None) else "OmniRoute"
         
-        if gemini_configured:
-            if is_fallback_active:
-                active_provider = "omniroute"
-                active_display = f"{fallback_label} (Fallback Active)"
-            else:
-                active_provider = "gemini"
-                active_display = "Gemini (Primary)"
+        if self.last_provider_used == "gemini" or (gemini_configured and not is_fallback_active):
+            active_provider = "gemini"
+            active_display = "Gemini (Primary)"
+        elif is_fallback_active or self.last_provider_used == "omniroute":
+            active_provider = "omniroute"
+            active_display = f"{fallback_label} (Fallback Active)" if is_fallback_active else f"{fallback_label} (Active)"
         elif omniroute_configured:
             active_provider = "omniroute"
             active_display = f"{fallback_label} (Active)"

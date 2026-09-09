@@ -274,9 +274,23 @@ class AutoApplyDailyRunRead(BaseModel):
     manual_required_count: int
     failed_count: int
     skipped_count: int
+    queued_count: int = 0
     error_message: Optional[str] = None
     run_summary_json: Optional[Dict[str, Any]] = None
     created_at: datetime
+
+    @model_validator(mode="before")
+    @classmethod
+    def populate_queued_count(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if "queued_count" not in data or data["queued_count"] == 0:
+                summary = data.get("run_summary_json") or {}
+                data["queued_count"] = summary.get("queued_count", 0)
+            return data
+        summary = getattr(data, "run_summary_json", None) or {}
+        if not hasattr(data, "queued_count") or getattr(data, "queued_count", 0) == 0:
+            setattr(data, "queued_count", summary.get("queued_count", 0))
+        return data
 
     class Config:
         from_attributes = True
@@ -299,6 +313,9 @@ class PlatformStatItem(BaseModel):
     failed: int
     daily_limit: int = 30
     applied_today: int
+    manual_today: int = 0
+    failed_today: int = 0
+    queued_today: int = 0
     current_daily_count: int
     progress_pct: float
     last_activity_utc: Optional[datetime] = None
@@ -314,8 +331,20 @@ class PlatformsDashboardResponse(BaseModel):
     total_manual_required_today: int = 0
     total_failed_today: int = 0
     total_queued_for_next_window: int = 0
+    total_matching_jobs: int = 0
     application_window: Optional[ApplicationWindowStatus] = None
     platforms: Dict[str, PlatformStatItem]
+
+class TodayAuditResponse(BaseModel):
+    user_id: str
+    date_ist: str
+    start_of_today_utc: datetime
+    end_of_today_utc: datetime
+    current_time_ist: str
+    application_window: ApplicationWindowStatus
+    metrics_today: Dict[str, int]
+    platforms: Dict[str, Dict[str, Any]]
+    recent_activity_today: List[Dict[str, Any]]
 
 class AutoApplyDailyRoutineInfo(BaseModel):
     schedule_time_display: str = "10:00 AM IST"

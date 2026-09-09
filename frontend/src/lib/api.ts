@@ -199,6 +199,7 @@ export const api = {
   // Dashboard & Analytics
   getDashboard: () => fetchApi<any>('/analytics/dashboard'),
   getPlatformStats: () => fetchApi<any>('/auto-apply/platforms/stats'),
+  getTodayAudit: () => fetchApi<any>('/auto-apply/audit/today'),
 
   // Jobs & Discovery Engine (Phase 3)
   getJobs: (params?: Record<string, string>) => {

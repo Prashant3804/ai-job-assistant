@@ -712,6 +712,7 @@ export interface AutoApplyDailyRun {
   manual_required_count: number;
   failed_count: number;
   skipped_count: number;
+  queued_count?: number;
   error_message?: string;
   run_summary_json?: Record<string, any>;
   created_at: string;
@@ -765,6 +766,9 @@ export interface PlatformStatItem {
   failed: number;
   daily_limit: number;
   applied_today: number;
+  manual_today?: number;
+  failed_today?: number;
+  queued_today?: number;
   current_daily_count: number;
   progress_pct: number;
   last_activity_utc?: string | null;
@@ -781,6 +785,7 @@ export interface PlatformsDashboardResponse {
   total_manual_required_today: number;
   total_failed_today: number;
   total_queued_for_next_window?: number;
+  total_matching_jobs?: number;
   application_window?: ApplicationWindowStatus;
   platforms: Record<string, PlatformStatItem>;
 }
